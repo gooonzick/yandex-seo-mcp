@@ -1,12 +1,16 @@
 {
-  "name": "yandex-seo-mcp",
-  "version": "0.1.0",
+  "name": "@gooonzick/yandex-seo-mcp",
+  "version": "1.0.0",
   "description": "MCP server for Yandex Metrica and Yandex Webmaster",
   "type": "module",
+  "packageManager": "pnpm@11.17.0",
   "bin": {
     "yandex-seo-mcp": "dist/index.js"
   },
   "main": "dist/index.js",
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "dist",
     "README.md",
@@ -36,7 +40,7 @@
   "author": "",
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "node": "24.x"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.11",
