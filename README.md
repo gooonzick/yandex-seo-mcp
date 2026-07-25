@@ -31,6 +31,49 @@ recrawling, and the Metrica Logs API.
 Create a Yandex OAuth application with the minimum required permissions and
 obtain a user OAuth token. Never commit tokens to Git.
 
+## Getting Yandex OAuth tokens
+
+This server uses user OAuth tokens: API responses contain only the counters and
+sites available to the Yandex account that authorized the application.
+
+1. Open the [Yandex OAuth application page](https://oauth.yandex.com/client/new)
+   and create an application.
+2. Add only the permissions you need:
+   - `metrika:read` for read-only access to Yandex Metrica.
+   - `webmaster:hostinfo` for read-only access to Yandex Webmaster.
+   - `webmaster:verify` only if you enable Webmaster write operations.
+3. Save the application and copy its client ID.
+4. Open the following URL, replacing `<CLIENT_ID>` with your client ID:
+
+   ```text
+   https://oauth.yandex.com/authorize?response_type=token&client_id=<CLIENT_ID>
+   ```
+
+5. Sign in with the Yandex account that owns or can access the required Metrica
+   counters and Webmaster sites, then approve the requested permissions.
+6. Copy the returned access token and store it only in your local MCP client
+   configuration or secret manager.
+
+If one application has permissions for both services, configure a shared token:
+
+```text
+YANDEX_OAUTH_TOKEN=your-token
+```
+
+You can also use separate applications or tokens when the permissions differ:
+
+```text
+YANDEX_METRICA_TOKEN=metrica-token
+YANDEX_WEBMASTER_TOKEN=webmaster-token
+```
+
+Service-specific tokens take precedence over `YANDEX_OAUTH_TOKEN`. If a token is
+compromised, revoke it in Yandex ID and issue a new one. See the official
+[Metrica authorization guide](https://yandex.ru/dev/metrika/en/intro/authorization)
+and
+[Webmaster OAuth guide](https://yandex.ru/dev/webmaster/doc/ru/tasks/how-to-get-oauth)
+for service-specific details.
+
 ## MCP client configuration
 
 The package can be run directly with `npx`:
