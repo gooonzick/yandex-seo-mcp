@@ -6,14 +6,14 @@ recrawling, and the Metrica Logs API.
 
 ## Features
 
-- Yandex Metrica counters, goals, custom reports, trends, and traffic/search
-  presets.
+- Yandex Metrica counters, goals, custom reports, trends, organic landing-page
+  and search-phrase presets.
 - Metrica Logs API evaluation, creation, status checks, and size-limited TSV
   downloads.
 - Yandex Webmaster sites, summaries, indexing status, indexed pages, search
   queries, query/URL analytics, diagnostics, sitemaps, and recrawl requests.
-- Cross-service SEO analysis for growth opportunities and period-over-period
-  Metrica comparisons.
+- Cross-service SEO analysis for growth opportunities, content decay, and
+  period-over-period Metrica comparisons.
 - `stdio` transport for local MCP clients.
 - Streamable HTTP transport powered by Hono.
 - Write tools disabled by default.

@@ -108,6 +108,15 @@
 
 Для постраничного чтения следующий `offset = current offset + data.length`; окончание — пустая страница либо достигнут `total_rows`. Не путать официальный параметр `ids` с встречающимся в старых примерах `id`/`counter_id`.
 
+### SEO-пресеты Reports API
+
+- Органические посадочные страницы: dimension `ym:s:startURL`, фильтр `ym:s:lastSignTrafficSource=='organic'`.
+- Органические поисковые фразы и посадочные страницы: dimensions `ym:s:lastSignSearchPhrase,ym:s:startURL` с тем же фильтром.
+- Базовые метрики: `ym:s:visits`, `ym:s:users`, `ym:s:bounceRate`, `ym:s:avgVisitDurationSeconds`, `ym:s:anyGoalConversionRate`.
+- Для конкретной цели последняя метрика заменяется на `ym:s:goal<goal_id>conversionRate`.
+
+Эти контракты используются инструментами `metrica_get_landing_pages`, `metrica_get_search_phrases` и `seo_detect_content_decay`.
+
 ## Reports API: динамика
 
 `GET /stat/v1/data/bytime`

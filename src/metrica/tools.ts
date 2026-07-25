@@ -28,6 +28,28 @@ const logsSchema = z.object({
   source: z.enum(["hits", "visits"]),
   fields: z.array(z.string().min(1)).min(1).max(100),
 });
+const organicPresetSchema = z.object({
+  counterId: counterIdSchema,
+  date1: dateSchema,
+  date2: dateSchema,
+  goalId: z.number().int().positive().optional(),
+  limit: z.number().int().min(1).max(10_000).default(100),
+  offset: z.number().int().min(1).default(1),
+  accuracy: z.union([z.literal("full"), z.number().min(0).max(1)]).optional(),
+});
+
+function organicMetrics(goalId: number | undefined): string {
+  const conversionMetric = goalId
+    ? `ym:s:goal${goalId}conversionRate`
+    : "ym:s:anyGoalConversionRate";
+  return [
+    "ym:s:visits",
+    "ym:s:users",
+    "ym:s:bounceRate",
+    "ym:s:avgVisitDurationSeconds",
+    conversionMetric,
+  ].join(",");
+}
 
 export function registerMetricaTools(
   server: McpServer,
@@ -204,9 +226,65 @@ export function registerMetricaTools(
             date1,
             date2,
             dimensions: "ym:s:lastSignSearchEngine",
-            metrics: "ym:s:visits,ym:s:users,ym:s:goalConversionRateAny",
+            metrics: "ym:s:visits,ym:s:users,ym:s:anyGoalConversionRate",
             filters: "ym:s:lastSignTrafficSource=='organic'",
             limit,
+          }),
+        limits,
+      ),
+  );
+
+  server.registerTool(
+    "metrica_get_landing_pages",
+    {
+      title: "Get organic landing pages from Metrica",
+      description:
+        "Return organic landing pages with visits, users, bounce rate, duration and conversion rate.",
+      inputSchema: organicPresetSchema,
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    },
+    (input) =>
+      handleTool(
+        () =>
+          client.getReport({
+            ids: input.counterId,
+            date1: input.date1,
+            date2: input.date2,
+            dimensions: "ym:s:startURL",
+            metrics: organicMetrics(input.goalId),
+            filters: "ym:s:lastSignTrafficSource=='organic'",
+            sort: "-ym:s:visits",
+            limit: input.limit,
+            offset: input.offset,
+            accuracy: input.accuracy,
+          }),
+        limits,
+      ),
+  );
+
+  server.registerTool(
+    "metrica_get_search_phrases",
+    {
+      title: "Get organic search phrases from Metrica",
+      description:
+        "Return organic search phrases and landing pages with engagement and conversion metrics.",
+      inputSchema: organicPresetSchema,
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    },
+    (input) =>
+      handleTool(
+        () =>
+          client.getReport({
+            ids: input.counterId,
+            date1: input.date1,
+            date2: input.date2,
+            dimensions: "ym:s:lastSignSearchPhrase,ym:s:startURL",
+            metrics: organicMetrics(input.goalId),
+            filters: "ym:s:lastSignTrafficSource=='organic'",
+            sort: "-ym:s:visits",
+            limit: input.limit,
+            offset: input.offset,
+            accuracy: input.accuracy,
           }),
         limits,
       ),

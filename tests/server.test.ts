@@ -80,6 +80,45 @@ describe("Yandex SEO MCP server", () => {
       }
       if (url.pathname.endsWith("/stat/v1/data")) {
         const date1 = url.searchParams.get("date1");
+        const dimensions = url.searchParams.get("dimensions");
+        if (dimensions === "ym:s:startURL") {
+          const data =
+            date1 === "2026-06-01"
+              ? [
+                  {
+                    dimensions: [{ name: "https://example.com/declining" }],
+                    metrics: [100, 80, 5],
+                  },
+                  {
+                    dimensions: [{ name: "https://example.com/lost" }],
+                    metrics: [40, 30, 3],
+                  },
+                ]
+              : [
+                  {
+                    dimensions: [{ name: "https://example.com/declining" }],
+                    metrics: [50, 42, 4],
+                  },
+                ];
+          return new Response(JSON.stringify({ data, total_rows: data.length, sampled: false }), {
+            status: 200,
+          });
+        }
+        if (dimensions === "ym:s:lastSignSearchPhrase,ym:s:startURL") {
+          return new Response(
+            JSON.stringify({
+              data: [
+                {
+                  dimensions: [{ name: "seo audit" }, { name: "https://example.com/audit" }],
+                  metrics: [25, 20, 10, 60, 4],
+                },
+              ],
+              total_rows: 1,
+              sampled: false,
+            }),
+            { status: 200 },
+          );
+        }
         const metrics = date1 === "2026-06-01" ? [100] : date1 === "2026-07-01" ? [125] : [10];
         return new Response(
           JSON.stringify({
@@ -124,6 +163,9 @@ describe("Yandex SEO MCP server", () => {
     expect(names).toContain("webmaster_get_query_analytics");
     expect(names).toContain("seo_find_growth_opportunities");
     expect(names).toContain("seo_compare_periods");
+    expect(names).toContain("metrica_get_landing_pages");
+    expect(names).toContain("metrica_get_search_phrases");
+    expect(names).toContain("seo_detect_content_decay");
     expect(names).not.toContain("metrica_logs_clean");
     expect(names).not.toContain("webmaster_request_recrawl");
   });
@@ -264,6 +306,79 @@ describe("Yandex SEO MCP server", () => {
           current: 125,
           absoluteDelta: 25,
           percentDelta: 25,
+        },
+      ],
+    });
+  });
+
+  it("uses safe organic presets for landing pages and search phrases", async () => {
+    const landingResponse = await client.callTool({
+      name: "metrica_get_landing_pages",
+      arguments: {
+        counterId: 123,
+        date1: "2026-07-01",
+        date2: "2026-07-31",
+        goalId: 456,
+      },
+    });
+    const phrasesResponse = await client.callTool({
+      name: "metrica_get_search_phrases",
+      arguments: {
+        counterId: 123,
+        date1: "2026-07-01",
+        date2: "2026-07-31",
+      },
+    });
+
+    expect(landingResponse.isError).not.toBe(true);
+    expect(phrasesResponse.isError).not.toBe(true);
+    const reportUrls = fetchMock.mock.calls
+      .map(([request]) => new URL(String(request)))
+      .filter((url) => url.pathname.endsWith("/stat/v1/data"));
+    expect(reportUrls[0]?.searchParams.get("dimensions")).toBe("ym:s:startURL");
+    expect(reportUrls[0]?.searchParams.get("metrics")).toContain("ym:s:goal456conversionRate");
+    expect(reportUrls[0]?.searchParams.get("filters")).toBe(
+      "ym:s:lastSignTrafficSource=='organic'",
+    );
+    expect(reportUrls[1]?.searchParams.get("dimensions")).toBe(
+      "ym:s:lastSignSearchPhrase,ym:s:startURL",
+    );
+    expect(reportUrls[1]?.searchParams.get("metrics")).toContain("ym:s:anyGoalConversionRate");
+  });
+
+  it("detects organic landing pages with material traffic decay", async () => {
+    const response = await client.callTool({
+      name: "seo_detect_content_decay",
+      arguments: {
+        counterId: 123,
+        previousDate1: "2026-06-01",
+        previousDate2: "2026-06-30",
+        currentDate1: "2026-07-01",
+        currentDate2: "2026-07-31",
+      },
+    });
+
+    expect(response.isError).not.toBe(true);
+    expect(response.structuredContent).toMatchObject({
+      analyzedCount: 2,
+      decayCount: 2,
+      sampled: false,
+      pages: [
+        {
+          url: "https://example.com/declining",
+          previousVisits: 100,
+          currentVisits: 50,
+          lostVisits: 50,
+          dropPercent: 50,
+          severity: "HIGH",
+        },
+        {
+          url: "https://example.com/lost",
+          currentObserved: false,
+          previousVisits: 40,
+          currentVisits: 0,
+          dropPercent: 100,
+          severity: "SEVERE",
         },
       ],
     });

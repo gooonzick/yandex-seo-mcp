@@ -35,6 +35,43 @@ function extractMetricValues(response: unknown): number[] {
     : [];
 }
 
+interface LandingPageMetrics {
+  url: string;
+  visits: number;
+  users: number;
+  conversionRate: number;
+}
+
+function extractDimensionValue(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  const record = asRecord(value);
+  const candidate = record?.name ?? record?.id;
+  return typeof candidate === "string" ? candidate : undefined;
+}
+
+function extractLandingPageMetrics(response: unknown): {
+  sampled: boolean;
+  rows: LandingPageMetrics[];
+} {
+  const record = asRecord(response);
+  const data = Array.isArray(record?.data) ? record.data : [];
+  const rows: LandingPageMetrics[] = [];
+  for (const rawRow of data) {
+    const row = asRecord(rawRow);
+    const dimensions = Array.isArray(row?.dimensions) ? row.dimensions : [];
+    const metrics = Array.isArray(row?.metrics) ? row.metrics : [];
+    const url = extractDimensionValue(dimensions[0]);
+    if (!url) continue;
+    rows.push({
+      url,
+      visits: finiteNumber(metrics[0]) ?? 0,
+      users: finiteNumber(metrics[1]) ?? 0,
+      conversionRate: finiteNumber(metrics[2]) ?? 0,
+    });
+  }
+  return { sampled: record?.sampled === true, rows };
+}
+
 interface QueryOpportunity {
   query: string;
   url?: string;
@@ -248,7 +285,7 @@ export function registerSeoTools(
             "ym:s:users",
             "ym:s:pageviews",
             "ym:s:bounceRate",
-            "ym:s:goalConversionRateAny",
+            "ym:s:anyGoalConversionRate",
           ]),
         filters: z.string().max(10_000).optional(),
         accuracy: z.union([z.literal("full"), z.number().min(0).max(1)]).optional(),
@@ -294,6 +331,109 @@ export function registerSeoTools(
           previousPeriod: { date1: input.previousDate1, date2: input.previousDate2 },
           currentPeriod: { date1: input.currentDate1, date2: input.currentDate2 },
           comparison,
+        };
+      }, limits),
+  );
+
+  server.registerTool(
+    "seo_detect_content_decay",
+    {
+      title: "Detect organic content decay",
+      description:
+        "Compare organic landing-page traffic across two periods and rank pages with material visit losses.",
+      inputSchema: z.object({
+        counterId: counterIdSchema,
+        previousDate1: dateSchema,
+        previousDate2: dateSchema,
+        currentDate1: dateSchema,
+        currentDate2: dateSchema,
+        goalId: z.number().int().positive().optional(),
+        sourceLimit: z.number().int().min(1).max(10_000).default(1_000),
+        resultLimit: z.number().int().min(1).max(100).default(25),
+        minPreviousVisits: z.number().nonnegative().default(20),
+        minDropPercent: z.number().min(0).max(100).default(20),
+        accuracy: z.union([z.literal("full"), z.number().min(0).max(1)]).optional(),
+      }),
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    },
+    (input) =>
+      handleTool(async () => {
+        const conversionMetric = input.goalId
+          ? `ym:s:goal${input.goalId}conversionRate`
+          : "ym:s:anyGoalConversionRate";
+        const common = {
+          ids: input.counterId,
+          dimensions: "ym:s:startURL",
+          metrics: `ym:s:visits,ym:s:users,${conversionMetric}`,
+          filters: "ym:s:lastSignTrafficSource=='organic'",
+          sort: "-ym:s:visits",
+          limit: input.sourceLimit,
+          offset: 1,
+          accuracy: input.accuracy,
+        };
+        const [previousResponse, currentResponse] = await Promise.all([
+          metrica.getReport({
+            ...common,
+            date1: input.previousDate1,
+            date2: input.previousDate2,
+          }),
+          metrica.getReport({
+            ...common,
+            date1: input.currentDate1,
+            date2: input.currentDate2,
+          }),
+        ]);
+        const previous = extractLandingPageMetrics(previousResponse);
+        const current = extractLandingPageMetrics(currentResponse);
+        const currentByUrl = new Map(current.rows.map((row) => [row.url, row]));
+        const decayed = previous.rows
+          .filter((row) => row.visits >= input.minPreviousVisits && row.visits > 0)
+          .map((previousRow) => {
+            const currentRow = currentByUrl.get(previousRow.url);
+            const currentVisits = currentRow?.visits ?? 0;
+            const lostVisits = previousRow.visits - currentVisits;
+            const dropPercent = (lostVisits / previousRow.visits) * 100;
+            return {
+              url: previousRow.url,
+              currentObserved: Boolean(currentRow),
+              previousVisits: round(previousRow.visits),
+              currentVisits: round(currentVisits),
+              lostVisits: round(lostVisits),
+              dropPercent: round(dropPercent),
+              previousUsers: round(previousRow.users),
+              currentUsers: round(currentRow?.users ?? 0),
+              previousConversionRate: round(previousRow.conversionRate),
+              currentConversionRate: currentRow ? round(currentRow.conversionRate) : null,
+              conversionRateDelta: currentRow
+                ? round(currentRow.conversionRate - previousRow.conversionRate)
+                : null,
+              severity:
+                !currentRow || dropPercent >= 75
+                  ? "SEVERE"
+                  : dropPercent >= 40
+                    ? "HIGH"
+                    : "MODERATE",
+            };
+          })
+          .filter((row) => row.dropPercent >= input.minDropPercent)
+          .sort((left, right) => right.lostVisits - left.lostVisits);
+
+        return {
+          previousPeriod: { date1: input.previousDate1, date2: input.previousDate2 },
+          currentPeriod: { date1: input.currentDate1, date2: input.currentDate2 },
+          thresholds: {
+            minPreviousVisits: input.minPreviousVisits,
+            minDropPercent: input.minDropPercent,
+          },
+          observation: {
+            sourceLimit: input.sourceLimit,
+            missingCurrentPagesTreatedAsZero: true,
+            note: "A page absent from the current top-N report may still have traffic below the source limit.",
+          },
+          sampled: previous.sampled || current.sampled,
+          analyzedCount: previous.rows.length,
+          decayCount: decayed.length,
+          pages: decayed.slice(0, input.resultLimit),
         };
       }, limits),
   );

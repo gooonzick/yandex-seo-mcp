@@ -6,9 +6,11 @@
 - MCP SDK v1.29.0, `stdio` и Streamable HTTP на Hono.
 - Общий OAuth HTTP-клиент с timeout, retry/backoff и безопасными ошибками.
 - Read-only инструменты Метрики, Reports API и основной lifecycle Logs API.
+- Безопасные пресеты Метрики для органических посадочных страниц и поисковых фраз.
 - Read-only инструменты Webmaster для hosts, indexing, search queries, diagnostics, Sitemap и recrawl queue.
 - Мониторинг запросов и URL через `query-analytics/list` с типизированными фильтрами и сортировкой.
 - Составные SEO-инструменты для поиска точек роста и сравнения периодов Метрики.
+- Анализ падения органического трафика посадочных страниц между периодами.
 - Подтверждаемые write-tools: очистка Logs request и постановка URL на переобход.
 - Ограничения строк/байтов и `structuredContent`.
 - Unit, MCP in-memory, stdio process и HTTP transport тесты.
