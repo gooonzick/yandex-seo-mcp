@@ -97,6 +97,46 @@ The package can be run directly with `npx`:
 
 You can use `YANDEX_OAUTH_TOKEN` as a shared fallback for both services.
 
+### Claude Code in this repository
+
+When Claude Code is started from a clone of this repository, do not use the
+`npx` configuration above in the project-level `.mcp.json`. Because the current
+directory is the package itself, npm can resolve the local package without
+creating its CLI link, and the MCP process exits with
+`yandex-seo-mcp: command not found`. Claude Code reports that process failure as
+`Failed to reconnect ... -32000: Connection closed`.
+
+Build the local entry point first:
+
+```bash
+pnpm install
+pnpm build
+```
+
+Then use the local build in `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "yandex-seo": {
+      "command": "node",
+      "args": ["dist/index.js"],
+      "env": {
+        "YANDEX_METRICA_TOKEN": "oauth-token",
+        "YANDEX_WEBMASTER_TOKEN": "oauth-token"
+      }
+    }
+  }
+}
+```
+
+Verify the connection or capture the server's stderr with:
+
+```bash
+claude mcp get yandex-seo
+claude --debug-file /tmp/claude-mcp.log mcp get yandex-seo
+```
+
 To install the CLI globally instead:
 
 ```bash
