@@ -178,9 +178,9 @@ Query: repeatable `query_indicator?`, `device_type_indicator?` (default `ALL`), 
 
 Источники: [популярные запросы](https://yandex.ru/dev/webmaster/doc/ru/reference/host-search-queries-popular), [история всех запросов](https://yandex.ru/dev/webmaster/doc/ru/reference/host-search-queries-history-all), [история запроса](https://yandex.ru/dev/webmaster/doc/ru/reference/host-search-queries-history).
 
-### Не включать в первый стабильный MCP-контракт
+### Дополнительные контракты
 
-- `POST /v4/user/{user-id}/hosts/{host-id}/query-analytics/list` — актуальный метод мониторинга запросов и URL за последние две недели; лимит 10 000 запросов в час, затем `429`. Контракт тела сложный (filters, sort, regions, device/search location/statistic enums) и должен быть реализован после отдельного live contract test. Источник: [мониторинг запросов](https://yandex.ru/dev/webmaster/doc/ru/reference/host-query-analytics).
+- `POST /v4/user/{user-id}/hosts/{host-id}/query-analytics/list` — актуальный метод мониторинга запросов и URL за последние две недели; лимит 10 000 запросов в час, затем `429`. Реализован с типизированными filters, sort, regions, device/search location/statistic enums; перед публикацией желательно сохранить отдельный live fixture. Источник: [мониторинг запросов](https://yandex.ru/dev/webmaster/doc/ru/reference/host-query-analytics).
 - `/v4/user/{user-id}/hosts/{host-id}/pro/serp/...` — PRO/β выгрузка по URL, асинхронная и с отдельными лимитами/доступностью дат. Не считать общедоступным API. Источник: [расширенная выгрузка β](https://yandex.ru/dev/webmaster/doc/ru/reference/enhanced-export).
 
 ## Диагностика
@@ -334,5 +334,9 @@ Write, disabled by default:
 
 19. `webmaster_submit_url_for_recrawl`
 20. `webmaster_submit_sitemap_for_recrawl` (после live-spike v4.1)
+
+Дополнительный read-only инструмент:
+
+21. `webmaster_get_query_analytics`
 
 Для всех list-tools MCP должен ограничивать фактический output, возвращать `count`, `offset/cursor` и `has_more` как нормализованные метаданные, не скрывая upstream pagination.

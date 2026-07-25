@@ -42,10 +42,48 @@ describe("Yandex SEO MCP server", () => {
           { status: 200 },
         );
       }
-      if (url.pathname.endsWith("/stat/v1/data")) {
+      if (url.pathname.endsWith("/query-analytics/list")) {
         return new Response(
           JSON.stringify({
-            data: [{ dimensions: [], metrics: [10] }],
+            count: 2,
+            text_indicator_to_statistics: [
+              {
+                text_indicator: { type: "QUERY", value: "seo audit" },
+                popular_complementary_indicator: {
+                  type: "URL",
+                  value: "https://example.com/audit",
+                },
+                statistics: [
+                  { date: "2026-07-20", field: "IMPRESSIONS", value: 1000 },
+                  { date: "2026-07-20", field: "CLICKS", value: 20 },
+                  { date: "2026-07-20", field: "CTR", value: 2 },
+                  { date: "2026-07-20", field: "POSITION", value: 8 },
+                  { date: "2026-07-20", field: "DEMAND", value: 1500 },
+                ],
+              },
+              {
+                text_indicator: { type: "QUERY", value: "example brand" },
+                popular_complementary_indicator: {
+                  type: "URL",
+                  value: "https://example.com",
+                },
+                statistics: [
+                  { date: "2026-07-20", field: "IMPRESSIONS", value: 500 },
+                  { date: "2026-07-20", field: "CLICKS", value: 250 },
+                  { date: "2026-07-20", field: "POSITION", value: 1 },
+                ],
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      if (url.pathname.endsWith("/stat/v1/data")) {
+        const date1 = url.searchParams.get("date1");
+        const metrics = date1 === "2026-06-01" ? [100] : date1 === "2026-07-01" ? [125] : [10];
+        return new Response(
+          JSON.stringify({
+            data: [{ dimensions: [], metrics }],
             total_rows: 1,
             sampled: false,
           }),
@@ -83,6 +121,9 @@ describe("Yandex SEO MCP server", () => {
     expect(names).toContain("yandex_capabilities");
     expect(names).toContain("metrica_get_report");
     expect(names).toContain("webmaster_list_hosts");
+    expect(names).toContain("webmaster_get_query_analytics");
+    expect(names).toContain("seo_find_growth_opportunities");
+    expect(names).toContain("seo_compare_periods");
     expect(names).not.toContain("metrica_logs_clean");
     expect(names).not.toContain("webmaster_request_recrawl");
   });
@@ -131,6 +172,101 @@ describe("Yandex SEO MCP server", () => {
     expect(response.isError).not.toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(String(fetchMock.mock.calls[1]![0])).toContain("/v4/user/42/hosts");
+  });
+
+  it("sends a normalized Webmaster query analytics body", async () => {
+    const response = await client.callTool({
+      name: "webmaster_get_query_analytics",
+      arguments: {
+        hostId: "https:example.com:443",
+        limit: 25,
+        textIndicator: "URL",
+        textFilters: [
+          {
+            textIndicator: "URL",
+            operation: "TEXT_CONTAINS",
+            value: "/catalog/",
+          },
+        ],
+        sortByDate: {
+          date: "2026-07-20",
+          statisticField: "IMPRESSIONS",
+          direction: "DESC",
+        },
+      },
+    });
+
+    expect(response.isError).not.toBe(true);
+    const queryCall = fetchMock.mock.calls.find(([request]) =>
+      String(request).endsWith("/query-analytics/list"),
+    );
+    expect(queryCall).toBeDefined();
+    expect(queryCall?.[1]?.method).toBe("POST");
+    expect(JSON.parse(String(queryCall?.[1]?.body))).toMatchObject({
+      limit: 25,
+      text_indicator: "URL",
+      filters: {
+        text_filters: [{ operation: "TEXT_CONTAINS", value: "/catalog/" }],
+      },
+      sort_by_date: {
+        date: "2026-07-20",
+        statistic_field: "IMPRESSIONS",
+        by: "DESC",
+      },
+    });
+  });
+
+  it("finds low-CTR and striking-distance SEO opportunities", async () => {
+    const response = await client.callTool({
+      name: "seo_find_growth_opportunities",
+      arguments: {
+        hostId: "https:example.com:443",
+        date: "2026-07-20",
+      },
+    });
+
+    expect(response.isError).not.toBe(true);
+    expect(response.structuredContent).toMatchObject({
+      analyzedCount: 2,
+      opportunityCount: 1,
+      opportunities: [
+        {
+          query: "seo audit",
+          url: "https://example.com/audit",
+          ctr: 2,
+          position: 8,
+          estimatedAdditionalClicksAtTargetCtr: 30,
+          opportunityTypes: ["LOW_CTR", "STRIKING_DISTANCE"],
+        },
+      ],
+    });
+  });
+
+  it("compares Metrica periods with absolute and percentage deltas", async () => {
+    const response = await client.callTool({
+      name: "seo_compare_periods",
+      arguments: {
+        counterId: 123,
+        previousDate1: "2026-06-01",
+        previousDate2: "2026-06-30",
+        currentDate1: "2026-07-01",
+        currentDate2: "2026-07-31",
+        metrics: ["ym:s:visits"],
+      },
+    });
+
+    expect(response.isError).not.toBe(true);
+    expect(response.structuredContent).toMatchObject({
+      comparison: [
+        {
+          metric: "ym:s:visits",
+          previous: 100,
+          current: 125,
+          absoluteDelta: 25,
+          percentDelta: 25,
+        },
+      ],
+    });
   });
 
   it("returns an MCP validation error for invalid arguments", async () => {

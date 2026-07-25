@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { AppConfig } from "./config.js";
 import { MetricaClient } from "./metrica/client.js";
 import { registerMetricaTools } from "./metrica/tools.js";
+import { registerSeoTools } from "./seo/tools.js";
 import { safeError } from "./shared/errors.js";
 import { handleTool } from "./shared/result.js";
 import { WebmasterClient } from "./webmaster/client.js";
@@ -109,6 +110,7 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
 
   registerMetricaTools(server, metrica, config);
   registerWebmasterTools(server, webmaster, config);
+  registerSeoTools(server, metrica, webmaster, config);
 
   return { server, metrica, webmaster };
 }

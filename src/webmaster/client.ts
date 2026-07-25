@@ -74,6 +74,14 @@ export class WebmasterClient {
     return this.http.request(`${await this.hostPath(hostId)}/search-queries/popular`, { query });
   }
 
+  public async getQueryAnalytics(hostId: string, body: unknown): Promise<unknown> {
+    return this.http.request(`${await this.hostPath(hostId)}/query-analytics/list`, {
+      method: "POST",
+      body,
+      retryable: true,
+    });
+  }
+
   public async getQueryHistory(
     hostId: string,
     queryId: string | undefined,

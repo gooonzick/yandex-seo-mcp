@@ -11,6 +11,33 @@ const periodSchema = z.object({
   dateFrom: dateSchema,
   dateTo: dateSchema,
 });
+const deviceTypeSchema = z
+  .enum(["ALL", "DESKTOP", "MOBILE_AND_TABLET", "MOBILE", "TABLET"])
+  .default("ALL");
+const searchLocationSchema = z
+  .enum([
+    "ALL_LOCATIONS",
+    "ALL_LOCATIONS_ORGANIC",
+    "WEB_LOCATION",
+    "DYNAMIC_LOCATION_ALL",
+    "DYNAMIC_LOCATION_BASIC",
+    "DYNAMIC_LOCATION_ADDITIONAL",
+  ])
+  .default("WEB_LOCATION");
+const statisticFieldSchema = z.enum(["IMPRESSIONS", "POSITION", "CLICKS", "CTR", "DEMAND"]);
+const textIndicatorSchema = z.enum(["QUERY", "URL"]);
+const textFilterSchema = z.object({
+  textIndicator: textIndicatorSchema,
+  operation: z.enum(["TEXT_CONTAINS", "TEXT_MATCH", "TEXT_DOES_NOT_CONTAIN"]),
+  value: z.string().min(1).max(2_000),
+});
+const statisticFilterSchema = z.object({
+  statisticField: statisticFieldSchema,
+  operation: z.enum(["LESS_THAN", "GREATER_THAN", "LESS_EQUAL", "GREATER_EQUAL", "EQUAL"]),
+  value: z.number().finite(),
+  from: dateSchema,
+  to: dateSchema,
+});
 
 export function registerWebmasterTools(
   server: McpServer,
@@ -115,6 +142,84 @@ export function registerWebmasterTools(
           }),
         limits,
       ),
+  );
+
+  server.registerTool(
+    "webmaster_get_query_analytics",
+    {
+      title: "Monitor Yandex search queries and URLs",
+      description:
+        "Get query or URL statistics for the last two weeks with device, region, text and statistic filters.",
+      inputSchema: z.object({
+        hostId: hostIdSchema,
+        offset: z.number().int().min(0).default(0),
+        limit: z.number().int().min(1).max(500).default(100),
+        deviceType: deviceTypeSchema,
+        searchLocation: searchLocationSchema,
+        textIndicator: textIndicatorSchema.default("QUERY"),
+        regionIds: z.array(z.number().int().positive()).max(100).optional(),
+        textFilters: z.array(textFilterSchema).max(20).optional(),
+        statisticFilters: z.array(statisticFilterSchema).max(20).optional(),
+        sortByDate: z
+          .object({
+            date: dateSchema,
+            statisticField: statisticFieldSchema,
+            direction: z.enum(["ASC", "DESC"]).default("DESC"),
+          })
+          .optional(),
+      }),
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    },
+    (input) => {
+      const filters =
+        input.textFilters?.length || input.statisticFilters?.length
+          ? {
+              ...(input.textFilters?.length
+                ? {
+                    text_filters: input.textFilters.map((filter) => ({
+                      text_indicator: filter.textIndicator,
+                      operation: filter.operation,
+                      value: filter.value,
+                    })),
+                  }
+                : {}),
+              ...(input.statisticFilters?.length
+                ? {
+                    statistic_filters: input.statisticFilters.map((filter) => ({
+                      statistic_field: filter.statisticField,
+                      operation: filter.operation,
+                      value: String(filter.value),
+                      from: filter.from,
+                      to: filter.to,
+                    })),
+                  }
+                : {}),
+            }
+          : undefined;
+
+      return handleTool(
+        () =>
+          client.getQueryAnalytics(input.hostId, {
+            offset: input.offset,
+            limit: input.limit,
+            device_type_indicator: input.deviceType,
+            search_location: input.searchLocation,
+            text_indicator: input.textIndicator,
+            ...(input.regionIds ? { region_ids: input.regionIds } : {}),
+            ...(filters ? { filters } : {}),
+            ...(input.sortByDate
+              ? {
+                  sort_by_date: {
+                    date: input.sortByDate.date,
+                    statistic_field: input.sortByDate.statisticField,
+                    by: input.sortByDate.direction,
+                  },
+                }
+              : {}),
+          }),
+        limits,
+      );
+    },
   );
 
   server.registerTool(

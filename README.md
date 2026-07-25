@@ -11,7 +11,9 @@ recrawling, and the Metrica Logs API.
 - Metrica Logs API evaluation, creation, status checks, and size-limited TSV
   downloads.
 - Yandex Webmaster sites, summaries, indexing status, indexed pages, search
-  queries, diagnostics, sitemaps, and recrawl requests.
+  queries, query/URL analytics, diagnostics, sitemaps, and recrawl requests.
+- Cross-service SEO analysis for growth opportunities and period-over-period
+  Metrica comparisons.
 - `stdio` transport for local MCP clients.
 - Streamable HTTP transport powered by Hono.
 - Write tools disabled by default.
