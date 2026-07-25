@@ -1,6 +1,6 @@
 {
   "name": "@gooonzick/yandex-seo-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server for Yandex Metrica and Yandex Webmaster",
   "type": "module",
   "packageManager": "pnpm@11.17.0",

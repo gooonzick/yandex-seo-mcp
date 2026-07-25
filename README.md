@@ -1,58 +1,46 @@
 # Yandex SEO MCP
 
-MCP-сервер для Яндекс Метрики и Яндекс Вебмастера. Он предоставляет AI-клиентам типизированные инструменты для SEO-аналитики, отчетов Метрики, индексирования, поисковых запросов, Sitemap и Logs API.
+An MCP server for Yandex Metrica and Yandex Webmaster. It gives AI clients
+typed tools for analytics reports, indexing data, search queries, sitemaps,
+recrawling, and the Metrica Logs API.
 
-## Возможности
+## Features
 
-- Метрика: счетчики, цели, произвольные отчеты, динамика, traffic/search presets.
-- Logs API: evaluate, create, status и ограниченное по размеру скачивание TSV.
-- Вебмастер: сайты, сводка, индексирование, страницы в поиске, запросы, диагностика, Sitemap и очередь переобхода.
-- `stdio` для локальных MCP-клиентов.
-- Streamable HTTP на Hono для серверного запуска.
-- Write-tools отключены по умолчанию.
-- OAuth-токены не передаются аргументами tools и не попадают в ответы.
-- Retry для `429/5xx`, timeout, валидация Zod и ограничения объема результата.
+- Yandex Metrica counters, goals, custom reports, trends, and traffic/search
+  presets.
+- Metrica Logs API evaluation, creation, status checks, and size-limited TSV
+  downloads.
+- Yandex Webmaster sites, summaries, indexing status, indexed pages, search
+  queries, diagnostics, sitemaps, and recrawl requests.
+- `stdio` transport for local MCP clients.
+- Streamable HTTP transport powered by Hono.
+- Write tools disabled by default.
+- OAuth tokens are never accepted as tool arguments or returned in responses.
+- Retries for `429` and `5xx` responses, request timeouts, Zod validation, and
+  configurable result-size limits.
 
-## Требования
+## Requirements
 
-- Node.js 20 или новее.
-- OAuth-приложение Яндекса.
-- Для Метрики: разрешение на чтение данных Метрики (`metrika:read`); write-доступ запрашивайте отдельно только при необходимости.
-- Для Вебмастера: `webmaster:hostinfo`; для изменяющих операций также может понадобиться `webmaster:verify`.
+- Node.js 24.
+- A Yandex OAuth application.
+- `metrika:read` permission for Yandex Metrica. Request write access separately
+  only if you need it.
+- `webmaster:hostinfo` permission for Yandex Webmaster. Mutating operations may
+  also require `webmaster:verify`.
 
-Создайте приложение в Яндекс OAuth, выдайте ему минимально необходимые права и получите пользовательский OAuth-токен. Не сохраняйте токены в Git.
+Create a Yandex OAuth application with the minimum required permissions and
+obtain a user OAuth token. Never commit tokens to Git.
 
-## Установка
+## MCP client configuration
 
-```bash
-npm install
-npm run build
-```
-
-Проверка:
-
-```bash
-npm run check
-```
-
-Live smoke tests выполняются только явно и требуют токенов:
-
-```bash
-YANDEX_METRICA_TOKEN=... \
-YANDEX_WEBMASTER_TOKEN=... \
-npm run test:live
-```
-
-## Локальная конфигурация MCP
-
-Соберите проект и укажите абсолютный путь к `dist/index.js`:
+The package can be run directly with `npx`:
 
 ```json
 {
   "mcpServers": {
     "yandex-seo": {
-      "command": "node",
-      "args": ["/absolute/path/to/yandex-seo-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@gooonzick/yandex-seo-mcp"],
       "env": {
         "YANDEX_METRICA_TOKEN": "oauth-token",
         "YANDEX_WEBMASTER_TOKEN": "oauth-token"
@@ -62,64 +50,99 @@ npm run test:live
 }
 ```
 
-Можно использовать один `YANDEX_OAUTH_TOKEN` как fallback для обоих сервисов.
+You can use `YANDEX_OAUTH_TOKEN` as a shared fallback for both services.
 
-## HTTP-режим
-
-По умолчанию сервер слушает только stdio. Для локального Streamable HTTP:
+To install the CLI globally instead:
 
 ```bash
-MCP_TRANSPORT=http npm start
+npm install --global @gooonzick/yandex-seo-mcp
+yandex-seo-mcp
 ```
 
-Endpoint: `http://127.0.0.1:3000/mcp`. Health check: `/health`.
+## HTTP transport
 
-Для bind на любой адрес кроме loopback сервер требует `MCP_HTTP_BEARER_TOKEN` длиной не менее 16 символов:
+The server uses `stdio` by default. To start a local Streamable HTTP server:
+
+```bash
+MCP_TRANSPORT=http npx -y @gooonzick/yandex-seo-mcp
+```
+
+The MCP endpoint is `http://127.0.0.1:3000/mcp`. The health endpoint is
+`http://127.0.0.1:3000/health`.
+
+Binding to an address other than loopback requires an
+`MCP_HTTP_BEARER_TOKEN` containing at least 16 characters:
 
 ```bash
 MCP_TRANSPORT=http \
 MCP_HTTP_HOST=0.0.0.0 \
 MCP_HTTP_BEARER_TOKEN='replace-with-a-long-random-secret' \
-npm start
+npx -y @gooonzick/yandex-seo-mcp
 ```
 
-Для публичного развертывания дополнительно используйте TLS, reverse proxy, полноценную OAuth-аутентификацию, encrypted token storage и ограничение доступа на уровне сети.
+For a public deployment, also use TLS, a reverse proxy, proper OAuth
+authentication, encrypted token storage, and network-level access controls.
 
-## Основные переменные
+## Environment variables
 
-| Переменная                |  Default | Назначение                          |
-| ------------------------- | -------: | ----------------------------------- |
-| `YANDEX_OAUTH_TOKEN`      |        — | Общий fallback-токен                |
-| `YANDEX_METRICA_TOKEN`    |        — | Отдельный токен Метрики             |
-| `YANDEX_WEBMASTER_TOKEN`  |        — | Отдельный токен Вебмастера          |
-| `YANDEX_HTTP_TIMEOUT_MS`  |  `30000` | Timeout запроса                     |
-| `YANDEX_HTTP_MAX_RETRIES` |      `3` | Retry для временных ошибок          |
-| `YANDEX_MAX_RESULT_ROWS`  |   `1000` | Максимум элементов каждого массива  |
-| `YANDEX_MAX_RESULT_BYTES` | `500000` | Максимум текста MCP-ответа          |
-| `ENABLE_WRITE_TOOLS`      |  `false` | Включить подтверждаемые write-tools |
-| `MCP_TRANSPORT`           |  `stdio` | `stdio` или `http`                  |
+| Variable                  | Default     | Description                                      |
+| ------------------------- | ----------- | ------------------------------------------------ |
+| `YANDEX_OAUTH_TOKEN`      | —           | Shared fallback token                            |
+| `YANDEX_METRICA_TOKEN`    | —           | Yandex Metrica token                             |
+| `YANDEX_WEBMASTER_TOKEN`  | —           | Yandex Webmaster token                           |
+| `YANDEX_HTTP_TIMEOUT_MS`  | `30000`     | Upstream request timeout                         |
+| `YANDEX_HTTP_MAX_RETRIES` | `3`         | Retry count for transient upstream errors        |
+| `YANDEX_MAX_RESULT_ROWS`  | `1000`      | Maximum number of items in each result array     |
+| `YANDEX_MAX_RESULT_BYTES` | `500000`    | Maximum MCP response text size                   |
+| `ENABLE_WRITE_TOOLS`      | `false`     | Enable write tools that require confirmation     |
+| `MCP_TRANSPORT`           | `stdio`     | Transport: `stdio` or `http`                     |
+| `MCP_HTTP_HOST`           | `127.0.0.1` | HTTP bind address                                |
+| `MCP_HTTP_PORT`           | `3000`      | HTTP port                                        |
+| `MCP_HTTP_BEARER_TOKEN`   | —           | Bearer token required for non-loopback HTTP bind |
 
-Полный пример находится в [.env.example](.env.example).
+See [.env.example](.env.example) for a complete configuration template.
 
-## Безопасность
+## Security
 
-- Не существует универсального `raw_api_request`.
-- Base URL обоих API фиксирован, поэтому аргументы tools не могут вызвать SSRF.
-- Logs download всегда ограничен по размеру MCP-ответа.
-- `metrica_logs_clean` и `webmaster_request_recrawl` появляются только при `ENABLE_WRITE_TOOLS=true` и требуют `confirm: true`.
-- При ошибках возвращаются безопасные категории и request ID без Authorization headers.
+- There is no unrestricted `raw_api_request` tool.
+- Both upstream API base URLs are fixed, preventing tool arguments from causing
+  SSRF.
+- Logs API downloads are always constrained by the MCP response-size limit.
+- `metrica_logs_clean` and `webmaster_request_recrawl` are registered only when
+  `ENABLE_WRITE_TOOLS=true`, and both require `confirm: true`.
+- Errors return safe categories and request IDs without exposing authorization
+  headers.
 
-## Разработка
+## Development
+
+Install dependencies and run the complete validation suite:
 
 ```bash
-npm run typecheck
-npm test
-npm run build
+pnpm install
+pnpm run check
 ```
 
-API-контракты и известные неопределенности:
+Run the server from source:
 
-- [Метрика](docs/research/metrica-api-contract.md)
-- [Вебмастер](docs/research/webmaster-api-contract.md)
-- [MCP SDK](docs/research/mcp-sdk-contract.md)
-- [Исходный план](docs/plans/yandex-seo-mcp-implementation-plan.md)
+```bash
+pnpm dev
+```
+
+Live smoke tests are opt-in and require OAuth tokens:
+
+```bash
+YANDEX_METRICA_TOKEN=... \
+YANDEX_WEBMASTER_TOKEN=... \
+pnpm test:live
+```
+
+API research and implementation notes:
+
+- [Yandex Metrica API contract](docs/research/metrica-api-contract.md)
+- [Yandex Webmaster API contract](docs/research/webmaster-api-contract.md)
+- [MCP SDK contract](docs/research/mcp-sdk-contract.md)
+- [Implementation plan](docs/plans/yandex-seo-mcp-implementation-plan.md)
+
+## License
+
+[MIT](LICENSE)
