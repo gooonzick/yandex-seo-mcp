@@ -1,8 +1,15 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AppConfig } from "./config.js";
+import { SeoCrawler } from "./crawler/crawler.js";
+import { registerCrawlerTools } from "./crawler/tools.js";
+import type { HostResolver } from "./crawler/types.js";
+import { registerQueryIntelligenceTools } from "./intelligence/tools.js";
 import { MetricaClient } from "./metrica/client.js";
 import { registerMetricaTools } from "./metrica/tools.js";
+import { registerMcpContent } from "./mcp/content.js";
+import { MonitoringStore } from "./monitoring/store.js";
+import { registerMonitoringTools } from "./monitoring/tools.js";
 import { registerSeoTools } from "./seo/tools.js";
 import { safeError } from "./shared/errors.js";
 import { handleTool } from "./shared/result.js";
@@ -12,12 +19,15 @@ import { registerWebmasterTools } from "./webmaster/tools.js";
 export interface ServerDependencies {
   config: AppConfig;
   fetch?: typeof globalThis.fetch;
+  resolveHost?: HostResolver;
 }
 
 export interface YandexSeoServer {
   server: McpServer;
   metrica: MetricaClient;
   webmaster: WebmasterClient;
+  monitoring: MonitoringStore;
+  crawler: SeoCrawler;
 }
 
 export function createServer(dependencies: ServerDependencies): YandexSeoServer {
@@ -29,6 +39,10 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
   const clientOptions = {
     timeoutMs: config.httpTimeoutMs,
     maxRetries: config.httpMaxRetries,
+    ...(config.httpMaxConcurrency !== undefined
+      ? { maxConcurrency: config.httpMaxConcurrency }
+      : {}),
+    ...(config.httpCacheTtlMs !== undefined ? { cacheTtlMs: config.httpCacheTtlMs } : {}),
     ...(dependencies.fetch ? { fetch: dependencies.fetch } : {}),
   };
   const metrica = new MetricaClient({
@@ -43,6 +57,14 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
     maxRows: config.maxResultRows,
     maxBytes: config.maxResultBytes,
   };
+  const monitoring = new MonitoringStore(
+    config.monitorStoragePath ?? ".yandex-seo-monitor.json",
+    config.monitorRetentionDays ?? 90,
+  );
+  const crawler = new SeoCrawler({
+    ...(dependencies.fetch ? { fetch: dependencies.fetch } : {}),
+    ...(dependencies.resolveHost ? { resolveHost: dependencies.resolveHost } : {}),
+  });
 
   server.registerTool(
     "yandex_capabilities",
@@ -64,9 +86,30 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
             maxBytes: config.maxResultBytes,
             timeoutMs: config.httpTimeoutMs,
             maxRetries: config.httpMaxRetries,
+            maxConcurrency: config.httpMaxConcurrency ?? 8,
+            cacheTtlMs: config.httpCacheTtlMs ?? 30_000,
           },
+          monitoring: {
+            retentionDays: config.monitorRetentionDays ?? 90,
+            intervalMs: config.monitorIntervalMs ?? 0,
+            scheduledTargets: config.monitorTargets?.length ?? 0,
+          },
+          crawler: {
+            maxPages: config.crawlerMaxPages ?? 200,
+            maxDepth: config.crawlerMaxDepth ?? 5,
+            concurrency: config.crawlerConcurrency ?? 4,
+            maxBodyBytes: config.crawlerMaxBodyBytes ?? 2_000_000,
+          },
+          queryIntelligence: {
+            maxQueries: config.queryMaxQueries ?? 500,
+            clusterThreshold: config.queryClusterThreshold ?? 0.42,
+            externalAiUsed: false,
+          },
+          multiUserOAuthConfigured: Boolean(
+            config.oauthClientId && config.oauthRedirectUri && config.oauthStorageKey,
+          ),
           writeToolsEnabled: config.enableWriteTools,
-          transport: "stdio",
+          transport: config.transport,
         }),
         limits,
       ),
@@ -111,6 +154,10 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
   registerMetricaTools(server, metrica, config);
   registerWebmasterTools(server, webmaster, config);
   registerSeoTools(server, metrica, webmaster, config);
+  registerMonitoringTools(server, monitoring, metrica, webmaster, config);
+  registerMcpContent(server, metrica, webmaster, monitoring, config);
+  registerCrawlerTools(server, crawler, webmaster, config);
+  registerQueryIntelligenceTools(server, webmaster, crawler, config);
 
-  return { server, metrica, webmaster };
+  return { server, metrica, webmaster, monitoring, crawler };
 }

@@ -5,6 +5,8 @@ export interface MetricaClientOptions {
   token?: string;
   timeoutMs: number;
   maxRetries: number;
+  maxConcurrency?: number;
+  cacheTtlMs?: number;
   fetch?: typeof globalThis.fetch;
 }
 
@@ -36,6 +38,10 @@ export class MetricaClient {
 
   public getTimeseries(query: Record<string, QueryValue>): Promise<unknown> {
     return this.http.request("stat/v1/data/bytime", { query });
+  }
+
+  public getComparison(query: Record<string, QueryValue>): Promise<unknown> {
+    return this.http.request("stat/v1/data/comparison", { query });
   }
 
   public evaluateLogRequest(

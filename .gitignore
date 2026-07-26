@@ -8,3 +8,5 @@ coverage/
 .DS_Store
 tmp/
 .pnpm-store
+.yandex-seo-monitor.json
+.yandex-seo-oauth.enc

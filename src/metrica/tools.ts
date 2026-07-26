@@ -38,6 +38,54 @@ const organicPresetSchema = z.object({
   accuracy: z.union([z.literal("full"), z.number().min(0).max(1)]).optional(),
 });
 
+const segmentPresetSchema = z.object({
+  counterId: counterIdSchema,
+  date1: dateSchema,
+  date2: dateSchema,
+  preset: z.enum([
+    "devices",
+    "regions",
+    "new_vs_returning",
+    "traffic_sources",
+    "search_engines",
+    "ecommerce",
+  ]),
+  attribution: z
+    .enum(["LastSign", "Last", "First", "LastNonDirect", "CrossDeviceLastSign"])
+    .default("LastSign"),
+  goalId: z.number().int().positive().optional(),
+  organicOnly: z.boolean().default(false),
+  limit: z.number().int().min(1).max(1_000).default(100),
+  accuracy: z.union([z.literal("full"), z.number().min(0).max(1)]).optional(),
+});
+
+const segmentPresets = {
+  devices: {
+    dimensions: "ym:s:deviceCategory",
+    metrics: "ym:s:visits,ym:s:users,ym:s:bounceRate,ym:s:anyGoalConversionRate",
+  },
+  regions: {
+    dimensions: "ym:s:regionArea",
+    metrics: "ym:s:visits,ym:s:users,ym:s:bounceRate,ym:s:anyGoalConversionRate",
+  },
+  new_vs_returning: {
+    dimensions: "ym:s:isNewUser",
+    metrics: "ym:s:visits,ym:s:users,ym:s:bounceRate,ym:s:anyGoalConversionRate",
+  },
+  traffic_sources: {
+    dimensions: "ym:s:lastSignTrafficSource",
+    metrics: "ym:s:visits,ym:s:users,ym:s:bounceRate,ym:s:anyGoalConversionRate",
+  },
+  search_engines: {
+    dimensions: "ym:s:lastSignSearchEngine",
+    metrics: "ym:s:visits,ym:s:users,ym:s:bounceRate,ym:s:anyGoalConversionRate",
+  },
+  ecommerce: {
+    dimensions: "ym:s:lastSignTrafficSource",
+    metrics: "ym:s:visits,ym:s:ecommercePurchases,ym:s:ecommerceRevenue",
+  },
+} as const;
+
 function organicMetrics(goalId: number | undefined): string {
   const conversionMetric = goalId
     ? `ym:s:goal${goalId}conversionRate`
@@ -284,6 +332,73 @@ export function registerMetricaTools(
             sort: "-ym:s:visits",
             limit: input.limit,
             offset: input.offset,
+            accuracy: input.accuracy,
+          }),
+        limits,
+      ),
+  );
+
+  server.registerTool(
+    "metrica_get_segment_performance",
+    {
+      title: "Get a segmented Metrica performance report",
+      description:
+        "Run a safe preset for devices, regions, visitor type, attribution sources, search engines or ecommerce.",
+      inputSchema: segmentPresetSchema,
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    },
+    (input) =>
+      handleTool(() => {
+        const preset = segmentPresets[input.preset];
+        const metrics = input.goalId
+          ? preset.metrics.replace(
+              "ym:s:anyGoalConversionRate",
+              `ym:s:goal${input.goalId}conversionRate`,
+            )
+          : preset.metrics;
+        return client.getReport({
+          ids: input.counterId,
+          date1: input.date1,
+          date2: input.date2,
+          dimensions: preset.dimensions,
+          metrics,
+          filters: input.organicOnly ? "ym:s:lastSignTrafficSource=='organic'" : undefined,
+          attribution: input.attribution,
+          sort: `-${metrics.split(",")[0]}`,
+          limit: input.limit,
+          accuracy: input.accuracy,
+        });
+      }, limits),
+  );
+
+  server.registerTool(
+    "metrica_compare_segments",
+    {
+      title: "Compare two Metrica segments",
+      description: "Compare two explicit Metrica filter expressions in one report.",
+      inputSchema: z.object({
+        counterId: counterIdSchema,
+        date1: dateSchema,
+        date2: dateSchema,
+        metrics: z.array(z.string().min(1)).min(1).max(20),
+        dimensions: z.array(z.string().min(1)).max(10).optional(),
+        segmentA: z.string().min(1).max(10_000),
+        segmentB: z.string().min(1).max(10_000),
+        accuracy: z.union([z.literal("full"), z.number().min(0).max(1)]).optional(),
+      }),
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    },
+    (input) =>
+      handleTool(
+        () =>
+          client.getComparison({
+            ids: input.counterId,
+            date1: input.date1,
+            date2: input.date2,
+            metrics: csv(input.metrics),
+            dimensions: csv(input.dimensions),
+            filters_a: input.segmentA,
+            filters_b: input.segmentB,
             accuracy: input.accuracy,
           }),
         limits,

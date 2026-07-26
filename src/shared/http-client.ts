@@ -1,4 +1,5 @@
 import { classifyHttpStatus, YandexApiError } from "./errors.js";
+import { telemetry } from "./telemetry.js";
 
 export type QueryValue =
   string | number | boolean | readonly (string | number | boolean)[] | null | undefined;
@@ -8,6 +9,8 @@ export interface HttpClientOptions {
   token?: string;
   timeoutMs: number;
   maxRetries: number;
+  maxConcurrency?: number;
+  cacheTtlMs?: number;
   fetch?: typeof globalThis.fetch;
 }
 
@@ -69,12 +72,19 @@ export class YandexHttpClient {
   private readonly timeoutMs: number;
   private readonly maxRetries: number;
   private readonly fetchImplementation: typeof globalThis.fetch;
+  private readonly maxConcurrency: number;
+  private readonly cacheTtlMs: number;
+  private readonly cache = new Map<string, { expiresAt: number; value: unknown }>();
+  private readonly waiters: Array<() => void> = [];
+  private activeRequests = 0;
 
   public constructor(options: HttpClientOptions) {
     this.baseUrl = new URL(options.baseUrl.endsWith("/") ? options.baseUrl : `${options.baseUrl}/`);
     this.token = options.token;
     this.timeoutMs = options.timeoutMs;
     this.maxRetries = options.maxRetries;
+    this.maxConcurrency = options.maxConcurrency ?? 8;
+    this.cacheTtlMs = options.cacheTtlMs ?? 30_000;
     this.fetchImplementation = options.fetch ?? globalThis.fetch;
   }
 
@@ -88,73 +98,120 @@ export class YandexHttpClient {
 
     const method = options.method ?? "GET";
     const retryable = options.retryable ?? method === "GET";
+    const cacheKey =
+      method === "GET" && options.responseType !== "text"
+        ? `${path}?${JSON.stringify(options.query ?? {})}`
+        : undefined;
+    const cached = cacheKey ? this.cache.get(cacheKey) : undefined;
+    if (cached && cached.expiresAt > Date.now()) {
+      telemetry.cacheHit();
+      return structuredClone(cached.value) as T;
+    }
+    if (cached) this.cache.delete(cacheKey!);
 
-    for (let attempt = 0; ; attempt += 1) {
-      const url = new URL(path.replace(/^\//, ""), this.baseUrl);
-      if (options.query) appendQuery(url, options.query);
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    await this.acquire();
+    const finishTelemetry = telemetry.begin();
 
-      try {
-        const response = await this.fetchImplementation(url, {
-          method,
-          headers: {
-            Authorization: `OAuth ${this.token}`,
-            Accept: "application/json",
-            ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
-            ...options.headers,
-          },
-          ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
-          signal: controller.signal,
-        });
+    try {
+      for (let attempt = 0; ; attempt += 1) {
+        const url = new URL(path.replace(/^\//, ""), this.baseUrl);
+        if (options.query) appendQuery(url, options.query);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
-        const requestId =
-          response.headers.get("x-request-id") ?? response.headers.get("request-id") ?? undefined;
-        const retryAfterMs = parseRetryAfter(response.headers.get("retry-after"));
+        try {
+          const response = await this.fetchImplementation(url, {
+            method,
+            headers: {
+              Authorization: `OAuth ${this.token}`,
+              Accept: "application/json",
+              ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
+              ...options.headers,
+            },
+            ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+            signal: controller.signal,
+          });
 
-        if (!response.ok) {
-          const payload = await response.json().catch(() => undefined);
-          const canRetry =
-            retryable &&
-            attempt < this.maxRetries &&
-            (response.status === 429 || response.status >= 500);
+          const requestId =
+            response.headers.get("x-request-id") ?? response.headers.get("request-id") ?? undefined;
+          const retryAfterMs = parseRetryAfter(response.headers.get("retry-after"));
 
-          if (canRetry) {
-            await sleep(retryAfterMs ?? Math.min(10_000, 250 * 2 ** attempt + Math.random() * 200));
-            continue;
+          if (!response.ok) {
+            const payload = await response.json().catch(() => undefined);
+            const canRetry =
+              retryable &&
+              attempt < this.maxRetries &&
+              (response.status === 429 || response.status >= 500);
+
+            if (canRetry) {
+              telemetry.retry();
+              await sleep(
+                retryAfterMs ?? Math.min(10_000, 250 * 2 ** attempt + Math.random() * 200),
+              );
+              continue;
+            }
+
+            telemetry.failure(response.status);
+            throw new YandexApiError(
+              classifyHttpStatus(response.status),
+              getApiMessage(payload, response.status),
+              {
+                status: response.status,
+                ...(requestId ? { requestId } : {}),
+                ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+              },
+            );
           }
 
-          throw new YandexApiError(
-            classifyHttpStatus(response.status),
-            getApiMessage(payload, response.status),
-            {
-              status: response.status,
-              ...(requestId ? { requestId } : {}),
-              ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
-            },
-          );
-        }
-
-        if (response.status === 204) return undefined as T;
-        if (options.responseType === "text") return (await response.text()) as T;
-        return (await response.json()) as T;
-      } catch (error) {
-        if (error instanceof YandexApiError) throw error;
-        if (error instanceof Error && error.name === "AbortError") {
-          throw new YandexApiError("TIMEOUT", "Yandex API request timed out", {
+          telemetry.success(response.status);
+          if (response.status === 204) return undefined as T;
+          const value =
+            options.responseType === "text" ? await response.text() : await response.json();
+          if (cacheKey && this.cacheTtlMs > 0) this.putCache(cacheKey, value);
+          return value as T;
+        } catch (error) {
+          if (error instanceof YandexApiError) throw error;
+          if (error instanceof Error && error.name === "AbortError") {
+            telemetry.failure("timeout");
+            throw new YandexApiError("TIMEOUT", "Yandex API request timed out", {
+              cause: error,
+            });
+          }
+          if (retryable && attempt < this.maxRetries) {
+            telemetry.retry();
+            await sleep(Math.min(10_000, 250 * 2 ** attempt + Math.random() * 200));
+            continue;
+          }
+          telemetry.failure("network");
+          throw new YandexApiError("NETWORK", "Could not reach Yandex API", {
             cause: error,
           });
+        } finally {
+          clearTimeout(timeout);
         }
-        if (retryable && attempt < this.maxRetries) {
-          await sleep(Math.min(10_000, 250 * 2 ** attempt + Math.random() * 200));
-          continue;
-        }
-        throw new YandexApiError("NETWORK", "Could not reach Yandex API", {
-          cause: error,
-        });
-      } finally {
-        clearTimeout(timeout);
       }
+    } finally {
+      finishTelemetry();
+      this.release();
     }
+  }
+
+  private async acquire(): Promise<void> {
+    if (this.activeRequests < this.maxConcurrency) {
+      this.activeRequests += 1;
+      return;
+    }
+    await new Promise<void>((resolve) => this.waiters.push(resolve));
+    this.activeRequests += 1;
+  }
+
+  private release(): void {
+    this.activeRequests = Math.max(0, this.activeRequests - 1);
+    this.waiters.shift()?.();
+  }
+
+  private putCache(key: string, value: unknown): void {
+    if (this.cache.size >= 200) this.cache.delete(this.cache.keys().next().value as string);
+    this.cache.set(key, { expiresAt: Date.now() + this.cacheTtlMs, value: structuredClone(value) });
   }
 }

@@ -12,14 +12,28 @@ recrawling, and the Metrica Logs API.
   downloads.
 - Yandex Webmaster sites, summaries, indexing status, indexed pages, search
   queries, query/URL analytics, diagnostics, sitemaps, and recrawl requests.
-- Cross-service SEO analysis for growth opportunities, content decay, and
-  period-over-period Metrica comparisons.
+- Cross-service page analysis, growth forecasting, cannibalization detection,
+  content decay, period comparisons, and a compact site audit.
+- Safe Metrica segment and attribution presets for devices, regions, visitor
+  type, acquisition sources, search engines, ecommerce, and segment comparison.
+- Persistent SEO snapshots, regression alerts, retention, and optional
+  background monitoring.
+- MCP resources for counters, sites, monitoring and telemetry, plus reusable
+  report, incident-analysis and backlog prompts.
 - `stdio` transport for local MCP clients.
 - Streamable HTTP transport powered by Hono.
 - Write tools disabled by default.
 - OAuth tokens are never accepted as tool arguments or returned in responses.
-- Retries for `429` and `5xx` responses, request timeouts, Zod validation, and
-  configurable result-size limits.
+- Retries for `429` and `5xx`, bounded concurrency, short-lived GET caching,
+  request telemetry, inbound rate limiting, Zod validation, and result limits.
+- Optional multi-user Authorization Code + PKCE with encrypted token storage
+  and isolated MCP bearer sessions.
+- A bounded same-origin technical crawler with robots.txt and Sitemap support,
+  on-page metadata checks, duplicate detection and internal-link graph analysis.
+- Sitemap/crawl/Webmaster index-sample reconciliation with a prioritized recrawl
+  backlog.
+- Deterministic query clustering, intent classification, cluster-to-page maps,
+  content-gap scoring and evidence-based content briefs.
 
 ## Requirements
 
@@ -165,25 +179,109 @@ MCP_HTTP_BEARER_TOKEN='replace-with-a-long-random-secret' \
 npx -y @gooonzick/yandex-seo-mcp
 ```
 
-For a public deployment, also use TLS, a reverse proxy, proper OAuth
-authentication, encrypted token storage, and network-level access controls.
+The `/ready` endpoint reports deployment readiness; `/metrics` exposes
+process-local request, retry, cache and latency counters.
+
+### Multi-user OAuth with PKCE
+
+For a remote multi-user deployment, configure:
+
+```text
+YANDEX_OAUTH_CLIENT_ID=...
+YANDEX_OAUTH_CLIENT_SECRET=...
+YANDEX_OAUTH_REDIRECT_URI=https://mcp.example.com/oauth/callback
+YANDEX_OAUTH_STORAGE_KEY=a-long-random-secret-of-at-least-32-characters
+```
+
+Open `/oauth/start?profile=<profile-name>`, visit the returned authorization URL,
+and complete the Yandex consent flow. The callback returns a one-time MCP bearer
+token. Yandex access and refresh tokens are stored in an AES-256-GCM encrypted
+file and each bearer token receives an isolated server/client pair. Use TLS,
+restrict the callback URL, and keep both storage key and returned bearer token in
+a secret manager.
+
+### Monitoring
+
+Snapshots can be captured with `monitor_capture_snapshot` and compared with
+`monitor_check_alerts`. To schedule snapshots, provide targets and an interval:
+
+```text
+MONITOR_INTERVAL_MS=3600000
+MONITOR_TARGETS_JSON=[{"name":"production","hostId":"https:example.com:443","counterId":123}]
+```
+
+### Technical crawler
+
+The crawler exposes:
+
+- `crawler_audit_site` for HTTP, metadata, canonical, robots, hreflang,
+  structured-data and duplicate checks;
+- `crawler_analyze_internal_links` for orphan, deep, weakly linked and broken
+  pages;
+- `crawler_reconcile_yandex_index` for Sitemap/crawl/Webmaster comparison and a
+  safe recrawl backlog.
+
+It crawls only the submitted public HTTP(S) origin, checks resolved IP addresses
+before every request and redirect, respects robots rules, bounds redirects,
+response bytes, depth, page count and concurrency, and never executes page
+JavaScript.
+
+### Query Intelligence
+
+The Query Intelligence layer uses Webmaster query analytics and crawler metadata
+without sending search queries to external AI services:
+
+- `query_intelligence_cluster_queries` groups related queries and classifies
+  informational, commercial, transactional, navigational and local intent;
+- `query_intelligence_map_pages` builds a cluster-to-page map and identifies
+  semantic cannibalization;
+- `query_intelligence_find_content_gaps` ranks missing, weak, conflicting and
+  technically blocked coverage;
+- `query_intelligence_generate_content_brief` produces a deterministic outline,
+  FAQ candidates, structured-data suggestions, internal-link sources and target
+  metrics.
+
+The latest result is available through
+`yandex://query-intelligence/last-analysis`. Clustering is intentionally
+reproducible and lexical; editorial and live SERP validation are still required.
 
 ## Environment variables
 
-| Variable                  | Default     | Description                                      |
-| ------------------------- | ----------- | ------------------------------------------------ |
-| `YANDEX_OAUTH_TOKEN`      | —           | Shared fallback token                            |
-| `YANDEX_METRICA_TOKEN`    | —           | Yandex Metrica token                             |
-| `YANDEX_WEBMASTER_TOKEN`  | —           | Yandex Webmaster token                           |
-| `YANDEX_HTTP_TIMEOUT_MS`  | `30000`     | Upstream request timeout                         |
-| `YANDEX_HTTP_MAX_RETRIES` | `3`         | Retry count for transient upstream errors        |
-| `YANDEX_MAX_RESULT_ROWS`  | `1000`      | Maximum number of items in each result array     |
-| `YANDEX_MAX_RESULT_BYTES` | `500000`    | Maximum MCP response text size                   |
-| `ENABLE_WRITE_TOOLS`      | `false`     | Enable write tools that require confirmation     |
-| `MCP_TRANSPORT`           | `stdio`     | Transport: `stdio` or `http`                     |
-| `MCP_HTTP_HOST`           | `127.0.0.1` | HTTP bind address                                |
-| `MCP_HTTP_PORT`           | `3000`      | HTTP port                                        |
-| `MCP_HTTP_BEARER_TOKEN`   | —           | Bearer token required for non-loopback HTTP bind |
+| Variable                         | Default                    | Description                                 |
+| -------------------------------- | -------------------------- | ------------------------------------------- |
+| `YANDEX_OAUTH_TOKEN`             | —                          | Shared fallback token                       |
+| `YANDEX_METRICA_TOKEN`           | —                          | Yandex Metrica token                        |
+| `YANDEX_WEBMASTER_TOKEN`         | —                          | Yandex Webmaster token                      |
+| `YANDEX_HTTP_TIMEOUT_MS`         | `30000`                    | Upstream request timeout                    |
+| `YANDEX_HTTP_MAX_RETRIES`        | `3`                        | Transient-error retry count                 |
+| `YANDEX_HTTP_MAX_CONCURRENCY`    | `8`                        | Maximum parallel upstream requests          |
+| `YANDEX_HTTP_CACHE_TTL_MS`       | `30000`                    | Successful GET cache lifetime; `0` disables |
+| `YANDEX_MAX_RESULT_ROWS`         | `1000`                     | Maximum items per result array              |
+| `YANDEX_MAX_RESULT_BYTES`        | `500000`                   | Maximum MCP response text size              |
+| `MONITOR_STORAGE_PATH`           | `.yandex-seo-monitor.json` | Snapshot file                               |
+| `MONITOR_RETENTION_DAYS`         | `90`                       | Snapshot retention                          |
+| `MONITOR_INTERVAL_MS`            | `0`                        | Scheduler interval; `0` disables            |
+| `MONITOR_TARGETS_JSON`           | `[]`                       | Scheduled target definitions                |
+| `CRAWLER_MAX_PAGES`              | `200`                      | Hard maximum pages per crawl                |
+| `CRAWLER_MAX_DEPTH`              | `5`                        | Hard maximum link depth                     |
+| `CRAWLER_TIMEOUT_MS`             | `15000`                    | Per-request crawler timeout                 |
+| `CRAWLER_MAX_BODY_BYTES`         | `2000000`                  | Maximum downloaded response body            |
+| `CRAWLER_CONCURRENCY`            | `4`                        | Maximum parallel crawler requests           |
+| `CRAWLER_DELAY_MS`               | `0`                        | Minimum delay between crawler requests      |
+| `CRAWLER_USER_AGENT`             | `YandexSeoMcpBot/1.0`      | Crawler HTTP user agent                     |
+| `QUERY_CLUSTER_THRESHOLD`        | `0.42`                     | Minimum lexical clustering similarity       |
+| `QUERY_MAX_QUERIES`              | `500`                      | Maximum Webmaster queries per analysis      |
+| `ENABLE_WRITE_TOOLS`             | `false`                    | Enable confirmed write tools                |
+| `MCP_TRANSPORT`                  | `stdio`                    | Transport: `stdio` or `http`                |
+| `MCP_HTTP_HOST`                  | `127.0.0.1`                | HTTP bind address                           |
+| `MCP_HTTP_PORT`                  | `3000`                     | HTTP port                                   |
+| `MCP_HTTP_BEARER_TOKEN`          | —                          | Static HTTP bearer token                    |
+| `MCP_HTTP_RATE_LIMIT_PER_MINUTE` | `120`                      | Per-address HTTP request limit              |
+| `YANDEX_OAUTH_CLIENT_ID`         | —                          | Multi-user OAuth client ID                  |
+| `YANDEX_OAUTH_CLIENT_SECRET`     | —                          | OAuth confidential-client secret            |
+| `YANDEX_OAUTH_REDIRECT_URI`      | —                          | Exact public callback URL                   |
+| `YANDEX_OAUTH_STORAGE_KEY`       | —                          | Encryption key material, at least 32 chars  |
+| `YANDEX_OAUTH_STORAGE_PATH`      | `.yandex-seo-oauth.enc`    | Encrypted OAuth profile store               |
 
 See [.env.example](.env.example) for a complete configuration template.
 
@@ -197,6 +295,10 @@ See [.env.example](.env.example) for a complete configuration template.
   `ENABLE_WRITE_TOOLS=true`, and both require `confirm: true`.
 - Errors return safe categories and request IDs without exposing authorization
   headers.
+- Monitoring files use owner-only permissions; OAuth tokens are encrypted at
+  rest and never returned by tools or resources.
+- Crawler requests reject credentials in URLs, localhost, private/reserved IP
+  ranges, mixed public/private DNS answers and unsafe redirect targets.
 
 ## Development
 

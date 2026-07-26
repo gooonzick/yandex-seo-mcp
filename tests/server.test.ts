@@ -23,7 +23,7 @@ describe("Yandex SEO MCP server", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
-    fetchMock = vi.fn(async (input: URL | RequestInfo) => {
+    fetchMock = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
       const url = new URL(String(input));
       if (url.pathname.endsWith("/v4/user")) {
         return new Response(JSON.stringify({ user_id: 42 }), { status: 200 });
@@ -43,6 +43,41 @@ describe("Yandex SEO MCP server", () => {
         );
       }
       if (url.pathname.endsWith("/query-analytics/list")) {
+        const body = JSON.parse(String(init?.body)) as { limit?: number };
+        if (body.limit === 499) {
+          return new Response(
+            JSON.stringify({
+              count: 2,
+              text_indicator_to_statistics: [
+                {
+                  text_indicator: { type: "QUERY", value: "seo audit" },
+                  popular_complementary_indicator: {
+                    type: "URL",
+                    value: "https://example.com/audit",
+                  },
+                  statistics: [
+                    { date: "2026-07-20", field: "IMPRESSIONS", value: 100 },
+                    { date: "2026-07-20", field: "CLICKS", value: 10 },
+                    { date: "2026-07-20", field: "POSITION", value: 7 },
+                  ],
+                },
+                {
+                  text_indicator: { type: "QUERY", value: "seo audit" },
+                  popular_complementary_indicator: {
+                    type: "URL",
+                    value: "https://example.com/seo",
+                  },
+                  statistics: [
+                    { date: "2026-07-20", field: "IMPRESSIONS", value: 50 },
+                    { date: "2026-07-20", field: "CLICKS", value: 3 },
+                    { date: "2026-07-20", field: "POSITION", value: 12 },
+                  ],
+                },
+              ],
+            }),
+            { status: 200 },
+          );
+        }
         return new Response(
           JSON.stringify({
             count: 2,
@@ -78,6 +113,46 @@ describe("Yandex SEO MCP server", () => {
           { status: 200 },
         );
       }
+      if (url.pathname === "/robots.txt") {
+        return new Response("User-agent: *\nSitemap: https://example.com/sitemap.xml", {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        });
+      }
+      if (url.pathname === "/sitemap.xml") {
+        return new Response(
+          `<?xml version="1.0"?><urlset>
+            <url><loc>https://example.com/</loc></url>
+            <url><loc>https://example.com/audit</loc></url>
+          </urlset>`,
+          { status: 200, headers: { "content-type": "application/xml" } },
+        );
+      }
+      if (url.pathname === "/audit") {
+        return new Response(
+          `<html><head><title>Generic service page</title>
+          <meta name="description" content="A generic service description without the target cluster terminology.">
+          <link rel="canonical" href="/audit"></head><body><h1>Services</h1></body></html>`,
+          { status: 200, headers: { "content-type": "text/html" } },
+        );
+      }
+      if (url.pathname === "/") {
+        return new Response(
+          `<html><head><title>Example brand official site</title>
+          <meta name="description" content="The official Example brand homepage and navigation destination.">
+          <link rel="canonical" href="/"></head><body><h1>Example brand</h1><a href="/audit">Services</a></body></html>`,
+          { status: 200, headers: { "content-type": "text/html" } },
+        );
+      }
+      if (url.pathname.endsWith("/summary")) {
+        return new Response(JSON.stringify({ searchable_pages_count: 120 }), { status: 200 });
+      }
+      if (url.pathname.endsWith("/diagnostics")) {
+        return new Response(JSON.stringify({ problems: [] }), { status: 200 });
+      }
+      if (url.pathname.endsWith("/sitemaps")) {
+        return new Response(JSON.stringify({ sitemaps: [] }), { status: 200 });
+      }
       if (url.pathname.endsWith("/stat/v1/data")) {
         const date1 = url.searchParams.get("date1");
         const dimensions = url.searchParams.get("dimensions");
@@ -94,12 +169,19 @@ describe("Yandex SEO MCP server", () => {
                     metrics: [40, 30, 3],
                   },
                 ]
-              : [
-                  {
-                    dimensions: [{ name: "https://example.com/declining" }],
-                    metrics: [50, 42, 4],
-                  },
-                ];
+              : date1 === "2026-07-15"
+                ? [
+                    {
+                      dimensions: [{ name: "https://example.com/audit" }],
+                      metrics: [30, 25, 40, 90, 3],
+                    },
+                  ]
+                : [
+                    {
+                      dimensions: [{ name: "https://example.com/declining" }],
+                      metrics: [50, 42, 4],
+                    },
+                  ];
           return new Response(JSON.stringify({ data, total_rows: data.length, sampled: false }), {
             status: 200,
           });
@@ -142,6 +224,7 @@ describe("Yandex SEO MCP server", () => {
     const created = createServer({
       config,
       fetch: fetchMock as unknown as typeof fetch,
+      resolveHost: async () => ["93.184.216.34"],
     });
     server = created.server;
     client = new Client({ name: "test-client", version: "1.0.0" });
@@ -166,6 +249,21 @@ describe("Yandex SEO MCP server", () => {
     expect(names).toContain("metrica_get_landing_pages");
     expect(names).toContain("metrica_get_search_phrases");
     expect(names).toContain("seo_detect_content_decay");
+    expect(names).toContain("seo_analyze_pages");
+    expect(names).toContain("seo_detect_cannibalization");
+    expect(names).toContain("seo_forecast_opportunities");
+    expect(names).toContain("seo_run_site_audit");
+    expect(names).toContain("metrica_get_segment_performance");
+    expect(names).toContain("metrica_compare_segments");
+    expect(names).toContain("monitor_capture_snapshot");
+    expect(names).toContain("monitor_check_alerts");
+    expect(names).toContain("crawler_audit_site");
+    expect(names).toContain("crawler_reconcile_yandex_index");
+    expect(names).toContain("crawler_analyze_internal_links");
+    expect(names).toContain("query_intelligence_cluster_queries");
+    expect(names).toContain("query_intelligence_map_pages");
+    expect(names).toContain("query_intelligence_find_content_gaps");
+    expect(names).toContain("query_intelligence_generate_content_brief");
     expect(names).not.toContain("metrica_logs_clean");
     expect(names).not.toContain("webmaster_request_recrawl");
   });
@@ -391,5 +489,183 @@ describe("Yandex SEO MCP server", () => {
     });
 
     expect(response.isError).toBe(true);
+  });
+
+  it("joins Webmaster visibility with Metrica page performance", async () => {
+    const response = await client.callTool({
+      name: "seo_analyze_pages",
+      arguments: {
+        hostId: "https:example.com:443",
+        counterId: 123,
+        date: "2026-07-20",
+        date1: "2026-07-15",
+        date2: "2026-07-20",
+        resultLimit: 1,
+      },
+    });
+
+    expect(response.isError).not.toBe(true);
+    expect(response.structuredContent).toMatchObject({
+      opportunityCount: 2,
+      pages: [
+        {
+          url: "https://example.com/audit",
+          webmasterObserved: true,
+          metricaObserved: true,
+          search: { impressions: 1000, clicks: 20, ctr: 2 },
+          engagement: { visits: 30, conversionRate: 3 },
+        },
+      ],
+    });
+  });
+
+  it("forecasts incremental clicks from a target position", async () => {
+    const response = await client.callTool({
+      name: "seo_forecast_opportunities",
+      arguments: {
+        hostId: "https:example.com:443",
+        date: "2026-07-20",
+        targetPosition: 3,
+      },
+    });
+
+    expect(response.isError).not.toBe(true);
+    expect(response.structuredContent).toMatchObject({
+      model: "POSITION_CTR_CURVE",
+      forecasts: [
+        {
+          query: "seo audit",
+          targetCtr: 10,
+          estimatedAdditionalClicks: 80,
+        },
+      ],
+    });
+  });
+
+  it("detects query cannibalization across multiple URLs", async () => {
+    const response = await client.callTool({
+      name: "seo_detect_cannibalization",
+      arguments: {
+        hostId: "https:example.com:443",
+        date: "2026-07-20",
+        sourceLimit: 499,
+      },
+    });
+
+    expect(response.isError).not.toBe(true);
+    expect(response.structuredContent).toMatchObject({
+      cannibalizationCount: 1,
+      issues: [
+        {
+          query: "seo audit",
+          competingPageCount: 2,
+          impressions: 150,
+        },
+      ],
+    });
+  });
+
+  it("runs a compact cross-service site audit", async () => {
+    const response = await client.callTool({
+      name: "seo_run_site_audit",
+      arguments: {
+        hostId: "https:example.com:443",
+        counterId: 123,
+        date1: "2026-07-01",
+        date2: "2026-07-20",
+      },
+    });
+
+    expect(response.isError).not.toBe(true);
+    expect(response.structuredContent).toMatchObject({
+      healthScore: 100,
+      grade: "A",
+      counts: { critical: 0, warnings: 0, sitemapErrors: 0 },
+    });
+  });
+
+  it("clusters queries and creates a query-to-page map", async () => {
+    const clusters = await client.callTool({
+      name: "query_intelligence_cluster_queries",
+      arguments: {
+        hostId: "https:example.com:443",
+        date: "2026-07-20",
+      },
+    });
+    const pageMap = await client.callTool({
+      name: "query_intelligence_map_pages",
+      arguments: {
+        hostId: "https:example.com:443",
+        date: "2026-07-20",
+      },
+    });
+
+    expect(clusters.isError).not.toBe(true);
+    expect(clusters.structuredContent).toMatchObject({
+      sourceCount: 2,
+      clusterCount: 2,
+    });
+    expect(pageMap.structuredContent).toMatchObject({
+      clusterCount: 2,
+      mappedClusterCount: 2,
+    });
+  });
+
+  it("finds weak content coverage and generates a content brief", async () => {
+    const gaps = await client.callTool({
+      name: "query_intelligence_find_content_gaps",
+      arguments: {
+        hostId: "https:example.com:443",
+        date: "2026-07-20",
+        startUrl: "https://example.com/",
+        crawlMaxPages: 10,
+      },
+    });
+    const brief = await client.callTool({
+      name: "query_intelligence_generate_content_brief",
+      arguments: {
+        hostId: "https:example.com:443",
+        date: "2026-07-20",
+        seedQuery: "seo audit",
+      },
+    });
+
+    expect(gaps.isError).not.toBe(true);
+    expect(gaps.structuredContent).toMatchObject({
+      gapCount: 1,
+      gaps: [
+        {
+          primaryQuery: "seo audit",
+          gapTypes: ["WEAK_PAGE_RELEVANCE"],
+        },
+      ],
+    });
+    expect(brief.structuredContent).toMatchObject({
+      type: "CONTENT_BRIEF",
+      matchedCluster: {
+        primaryQuery: "seo audit",
+      },
+      targetMetrics: {
+        impressions: 1000,
+      },
+    });
+  });
+
+  it("lists MCP resources and workflow prompts", async () => {
+    const [resources, prompts] = await Promise.all([client.listResources(), client.listPrompts()]);
+    expect(resources.resources.map((resource) => resource.uri)).toContain("yandex://telemetry");
+    expect(resources.resources.map((resource) => resource.uri)).toContain(
+      "yandex://crawler/last-audit",
+    );
+    expect(resources.resources.map((resource) => resource.uri)).toContain(
+      "yandex://query-intelligence/last-analysis",
+    );
+    expect(prompts.prompts.map((prompt) => prompt.name)).toEqual(
+      expect.arrayContaining([
+        "weekly_seo_report",
+        "investigate_traffic_drop",
+        "prioritize_seo_backlog",
+      ]),
+    );
   });
 });

@@ -78,4 +78,52 @@ describe("YandexHttpClient", () => {
       code: "NOT_CONFIGURED",
     });
   });
+
+  it("caches successful GET responses for the configured TTL", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ value: 1 }));
+    const client = new YandexHttpClient({
+      baseUrl: "https://example.test/",
+      token: "secret",
+      timeoutMs: 1000,
+      maxRetries: 0,
+      cacheTtlMs: 60_000,
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+
+    const first = await client.request("items", { query: { limit: 10 } });
+    const second = await client.request("items", { query: { limit: 10 } });
+
+    expect(first).toEqual(second);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("bounds concurrent upstream requests", async () => {
+    let active = 0;
+    let maximum = 0;
+    const fetchMock = vi.fn(async () => {
+      active += 1;
+      maximum = Math.max(maximum, active);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active -= 1;
+      return jsonResponse({ ok: true });
+    });
+    const client = new YandexHttpClient({
+      baseUrl: "https://example.test/",
+      token: "secret",
+      timeoutMs: 1000,
+      maxRetries: 0,
+      maxConcurrency: 2,
+      cacheTtlMs: 0,
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+
+    await Promise.all([
+      client.request("items/1"),
+      client.request("items/2"),
+      client.request("items/3"),
+      client.request("items/4"),
+    ]);
+
+    expect(maximum).toBe(2);
+  });
 });

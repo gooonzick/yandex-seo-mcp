@@ -49,7 +49,7 @@ describe("HTTP transport", () => {
     cleanups.push(() => yandexServer.server.close());
 
     await expect(startHttpTransport(yandexServer, insecure)).rejects.toThrow(
-      "MCP_HTTP_BEARER_TOKEN is required",
+      "MCP_HTTP_BEARER_TOKEN or Yandex OAuth PKCE is required",
     );
   });
 });

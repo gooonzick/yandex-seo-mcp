@@ -11,6 +11,19 @@
 - Мониторинг запросов и URL через `query-analytics/list` с типизированными фильтрами и сортировкой.
 - Составные SEO-инструменты для поиска точек роста и сравнения периодов Метрики.
 - Анализ падения органического трафика посадочных страниц между периодами.
+- Объединённая аналитика страниц Webmaster + Метрика, поиск каннибализации и прогноз прироста кликов.
+- Пакетный SEO-аудит с health score и приоритетными рекомендациями.
+- Сегментные и атрибуционные пресеты Метрики, включая ecommerce и comparison report.
+- Persistent monitoring snapshots, regression alerts, retention и interval scheduler.
+- MCP resources и prompts для типовых SEO workflow.
+- GET cache, bounded concurrency, HTTP rate limiting, telemetry и readiness endpoint.
+- Multi-user OAuth Authorization Code + PKCE, encrypted profile storage и изолированные bearer sessions.
+- Безопасный same-origin crawler с DNS/IP SSRF-защитой, robots.txt, Sitemap, on-page и structured-data проверками.
+- Анализ внутренней перелинковки: orphan/deep/weak pages, broken links и duplicate groups.
+- Сверка Sitemap, crawl results и Webmaster indexing samples с recrawl backlog.
+- Детерминированная кластеризация поисковых запросов и классификация интента.
+- Карта query cluster → landing page, semantic cannibalization и content gap scoring.
+- Evidence-based content briefs с outline, FAQ, schema и internal-link suggestions.
 - Подтверждаемые write-tools: очистка Logs request и постановка URL на переобход.
 - Ограничения строк/байтов и `structuredContent`.
 - Unit, MCP in-memory, stdio process и HTTP transport тесты.
@@ -24,7 +37,6 @@
 
 ## Отложено осознанно
 
-- Публичный multi-user OAuth Authorization Code + PKCE и encrypted token storage: это отдельный deployment-компонент, зависящий от выбранного хостинга и identity model.
 - `query-analytics` реализован по официальному контракту; перед публикацией желательно сохранить live fixture с доступного сайта.
 - Webmaster PRO/β endpoints доступны не всем аккаунтам и остаются вне стабильного контракта.
 - Sitemap recrawl v4.1 write-tool: success contract плохо индексируется и должен пройти live contract test.

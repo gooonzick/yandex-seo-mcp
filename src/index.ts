@@ -4,14 +4,23 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { ZodError } from "zod";
 import { loadConfig } from "./config.js";
 import { createServer } from "./server.js";
+import { startMonitoringScheduler } from "./monitoring/tools.js";
 import { startHttpTransport } from "./transports/http.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
   const yandexServer = createServer({ config });
+  const stopMonitoring = startMonitoringScheduler(
+    config.monitorTargets ?? [],
+    config.monitorIntervalMs ?? 0,
+    yandexServer.monitoring,
+    yandexServer.metrica,
+    yandexServer.webmaster,
+  );
   let closeTransport: () => Promise<void>;
 
   const shutdown = async (): Promise<void> => {
+    stopMonitoring?.();
     await closeTransport();
     await yandexServer.server.close();
     process.exitCode = 0;

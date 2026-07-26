@@ -5,6 +5,8 @@ export interface WebmasterClientOptions {
   token?: string;
   timeoutMs: number;
   maxRetries: number;
+  maxConcurrency?: number;
+  cacheTtlMs?: number;
   fetch?: typeof globalThis.fetch;
 }
 
