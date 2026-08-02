@@ -55,6 +55,18 @@ Query-параметров и пагинации нет. Ответ `{ hosts: Ho
 
 Источник: [информация о сайте](https://yandex.ru/dev/webmaster/doc/ru/reference/hosts-id).
 
+### Управление сайтами и подтверждением прав
+
+- `POST /v4/user/{user-id}/hosts` с телом `{ "host_url": "https://example.com" }`;
+  ответ `201` — `{ "host_id": "https:example.com:443" }`.
+- `DELETE /v4/user/{user-id}/hosts/{host-id}`; успешный ответ без тела.
+- `GET /v4/user/{user-id}/hosts/{host-id}/verification` возвращает состояние,
+  `verification_uin`, применимые способы и сведения о последней проверке.
+- `POST /v4/user/{user-id}/hosts/{host-id}/verification?verification_type=...`
+  запускает проверку. Явные типы: `DNS`, `HTML_FILE`, `META_TAG`.
+
+Создание, удаление и запуск verification доступны только как подтверждаемые write-tools.
+
 ### `GET /v4/user/{user-id}/hosts/{host-id}/summary`
 
 Ответ:
@@ -248,6 +260,17 @@ Query: `offset?: sitemap-id` (cursor, не числовой offset), `limit?: in
 
 Источники: [список Sitemap](https://yandex.ru/dev/webmaster/doc/ru/reference/host-sitemaps-get), [Sitemap по ID](https://yandex.ru/dev/webmaster/doc/ru/reference/host-sitemaps-sitemap-id-get), [добавленные пользователем Sitemap](https://yandex.ru/dev/webmaster/doc/ru/reference/host-user-added-sitemaps-get).
 
+### Управление пользовательскими Sitemap
+
+- `GET /v4/user/{user-id}/hosts/{host-id}/user-added-sitemaps/{sitemap-id}` — детали;
+- `POST /v4/user/{user-id}/hosts/{host-id}/user-added-sitemaps` с телом
+  `{ "url": "https://example.com/sitemap.xml" }`; ответ `201` — `{ sitemap_id: string }`;
+- `DELETE /v4/user/{user-id}/hosts/{host-id}/user-added-sitemaps/{sitemap-id}`;
+  ответ `204` без тела.
+
+Добавление требует подтверждённых прав на host; документированы ошибки
+`HOST_NOT_VERIFIED`, `SITEMAP_ALREADY_ADDED` и `SITEMAP_NOT_ADDED`.
+
 ## Переобход URL
 
 ### `GET /v4/user/{user-id}/hosts/{host-id}/recrawl/quota`
@@ -294,7 +317,7 @@ type QuotaInfo = {
 };
 ```
 
-Ошибки: `409 RECRAWL_IN_PROCESS` с `sitemapRecrawlInfo`; `429 HOST_RECRAWLS_QUOTA_EXCEEDED` с `quotaInfo`. Точные success status/body отдельных страниц плохо индексируются; перед включением write-tool обязателен live contract test. В MVP допустим только GET limit/status, а POST — за feature flag и явным подтверждением.
+Ошибки: `409 RECRAWL_IN_PROCESS` с `sitemapRecrawlInfo`; `429 HOST_RECRAWLS_QUOTA_EXCEEDED` с `quotaInfo`. Точные success status/body отдельных страниц плохо индексируются; перед публикацией write-tool обязателен live contract test. POST требует явного подтверждения.
 
 Источник: [приоритетный переобход Sitemap](https://yandex.ru/dev/webmaster/doc/ru/reference/host-priority-re-crawl-sitemap), [migration 4.1](https://yandex.ru/dev/webmaster/doc/ru/concepts/migration-guide).
 

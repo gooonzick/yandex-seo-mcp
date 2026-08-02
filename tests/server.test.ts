@@ -11,7 +11,6 @@ const config: AppConfig = {
   httpMaxRetries: 0,
   maxResultRows: 100,
   maxResultBytes: 100_000,
-  enableWriteTools: false,
   transport: "stdio",
   httpHost: "127.0.0.1",
   httpPort: 3000,
@@ -236,14 +235,21 @@ describe("Yandex SEO MCP server", () => {
     await Promise.allSettled([client.close(), server.close()]);
   });
 
-  it("lists namespaced tools and hides write tools by default", async () => {
+  it("lists namespaced read and confirmed write tools", async () => {
     const response = await client.listTools();
     const names = response.tools.map((tool) => tool.name);
 
     expect(names).toContain("yandex_capabilities");
     expect(names).toContain("metrica_get_report");
+    expect(names).toContain("metrica_get_goal");
+    expect(names).toContain("metrica_list_grants");
+    expect(names).toContain("metrica_get_grant");
+    expect(names).toContain("metrica_logs_list");
     expect(names).toContain("webmaster_list_hosts");
     expect(names).toContain("webmaster_get_query_analytics");
+    expect(names).toContain("webmaster_get_sitemap_recrawl_status");
+    expect(names).toContain("webmaster_get_verification");
+    expect(names).toContain("webmaster_get_user_sitemap");
     expect(names).toContain("seo_find_growth_opportunities");
     expect(names).toContain("seo_compare_periods");
     expect(names).toContain("metrica_get_landing_pages");
@@ -264,8 +270,21 @@ describe("Yandex SEO MCP server", () => {
     expect(names).toContain("query_intelligence_map_pages");
     expect(names).toContain("query_intelligence_find_content_gaps");
     expect(names).toContain("query_intelligence_generate_content_brief");
-    expect(names).not.toContain("metrica_logs_clean");
-    expect(names).not.toContain("webmaster_request_recrawl");
+    expect(names).toContain("metrica_logs_clean");
+    expect(names).toContain("metrica_logs_cancel");
+    expect(names).toContain("metrica_create_counter");
+    expect(names).toContain("metrica_update_counter");
+    expect(names).toContain("metrica_delete_counter");
+    expect(names).toContain("metrica_create_grant");
+    expect(names).toContain("metrica_update_grant");
+    expect(names).toContain("metrica_delete_grant");
+    expect(names).toContain("webmaster_request_recrawl");
+    expect(names).toContain("webmaster_request_sitemap_recrawl");
+    expect(names).toContain("webmaster_add_host");
+    expect(names).toContain("webmaster_delete_host");
+    expect(names).toContain("webmaster_request_verification");
+    expect(names).toContain("webmaster_add_user_sitemap");
+    expect(names).toContain("webmaster_delete_user_sitemap");
   });
 
   it("returns capabilities without making HTTP requests", async () => {
@@ -280,7 +299,7 @@ describe("Yandex SEO MCP server", () => {
         metrica: { configured: true },
         webmaster: { configured: true },
       },
-      writeToolsEnabled: false,
+      writeToolsEnabled: true,
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });

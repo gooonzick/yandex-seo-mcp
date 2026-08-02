@@ -8,6 +8,72 @@ const counterIdSchema = z.number().int().positive();
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 const csv = (values: readonly string[] | undefined): string | undefined => values?.join(",");
 
+const counterCreateSchema = z.object({
+  name: z.string().min(1).max(255),
+  site: z.string().min(1).max(255),
+  gdprAgreementAccepted: z.boolean(),
+  timeZoneName: z.string().min(1).max(100).optional(),
+  visitThreshold: z.number().int().min(1_800).max(21_600).optional(),
+  autogoalsEnabled: z.boolean().optional(),
+});
+
+const counterUpdateSchema = z
+  .object({
+    counterId: counterIdSchema,
+    confirm: z.literal(true),
+    name: z.string().min(1).max(255).optional(),
+    site: z.string().min(1).max(255).optional(),
+    timeZoneName: z.string().min(1).max(100).optional(),
+    visitThreshold: z.number().int().min(1_800).max(21_600).optional(),
+    autogoalsEnabled: z.boolean().optional(),
+    favorite: z.boolean().optional(),
+  })
+  .refine(
+    (input) =>
+      [
+        input.name,
+        input.site,
+        input.timeZoneName,
+        input.visitThreshold,
+        input.autogoalsEnabled,
+        input.favorite,
+      ].some((value) => value !== undefined),
+    "At least one counter setting is required",
+  );
+
+const grantPermissionSchema = z.enum(["view", "edit", "analyst", "analyst_access_filter"]);
+const grantDetailsSchema = z.object({
+  userLogin: z.string().min(1).max(255),
+  permission: grantPermissionSchema,
+  comment: z.string().max(255).optional(),
+  partnerDataAccess: z.boolean().optional(),
+  accessFilter: z
+    .object({
+      id: z.number().int().positive(),
+      name: z.string().min(1).max(255).optional(),
+    })
+    .optional(),
+});
+
+function grantBody(input: z.infer<typeof grantDetailsSchema>): Record<string, unknown> {
+  return {
+    user_login: input.userLogin,
+    perm: input.permission,
+    comment: input.comment,
+    partner_data_access: input.partnerDataAccess,
+    ...(input.accessFilter
+      ? {
+          access_filters: [
+            {
+              id: input.accessFilter.id,
+              ...(input.accessFilter.name ? { name: input.accessFilter.name } : {}),
+            },
+          ],
+        }
+      : {}),
+  };
+}
+
 const reportSchema = z.object({
   counterId: counterIdSchema,
   date1: dateSchema,
@@ -153,6 +219,45 @@ export function registerMetricaTools(
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     ({ counterId }) => handleTool(() => client.listGoals(counterId), limits),
+  );
+
+  server.registerTool(
+    "metrica_get_goal",
+    {
+      title: "Get a Yandex Metrica goal",
+      description: "Get configuration and metadata for one goal.",
+      inputSchema: z.object({
+        counterId: counterIdSchema,
+        goalId: z.number().int().positive(),
+      }),
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    },
+    ({ counterId, goalId }) => handleTool(() => client.getGoal(counterId, goalId), limits),
+  );
+
+  server.registerTool(
+    "metrica_list_grants",
+    {
+      title: "List Yandex Metrica counter grants",
+      description: "List permissions granted for one counter.",
+      inputSchema: z.object({ counterId: counterIdSchema }),
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    },
+    ({ counterId }) => handleTool(() => client.listGrants(counterId), limits),
+  );
+
+  server.registerTool(
+    "metrica_get_grant",
+    {
+      title: "Get a Yandex Metrica counter grant",
+      description: "Get one user's permission for a counter.",
+      inputSchema: z.object({
+        counterId: counterIdSchema,
+        userLogin: z.string().min(1).max(255),
+      }),
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    },
+    ({ counterId, userLogin }) => handleTool(() => client.getGrant(counterId, userLogin), limits),
   );
 
   server.registerTool(
@@ -469,6 +574,17 @@ export function registerMetricaTools(
   );
 
   server.registerTool(
+    "metrica_logs_list",
+    {
+      title: "List Metrica Logs API requests",
+      description: "List raw logs export requests for a counter.",
+      inputSchema: z.object({ counterId: counterIdSchema }),
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    },
+    ({ counterId }) => handleTool(() => client.listLogRequests(counterId), limits),
+  );
+
+  server.registerTool(
     "metrica_logs_download_part",
     {
       title: "Download a bounded Metrica Logs API part",
@@ -490,27 +606,184 @@ export function registerMetricaTools(
       ),
   );
 
-  if (config.enableWriteTools) {
-    server.registerTool(
-      "metrica_logs_clean",
-      {
-        title: "Clean a Metrica Logs API request",
-        description:
-          "Delete a completed raw logs request from Yandex. Requires explicit confirmation.",
-        inputSchema: z.object({
-          counterId: counterIdSchema,
-          requestId: z.number().int().positive(),
-          confirm: z.literal(true),
-        }),
-        annotations: {
-          readOnlyHint: false,
-          destructiveHint: true,
-          idempotentHint: true,
-          openWorldHint: true,
-        },
+  server.registerTool(
+    "metrica_create_counter",
+    {
+      title: "Create a Yandex Metrica counter",
+      description: "Create one counter with an explicit safe settings subset.",
+      inputSchema: counterCreateSchema.extend({ confirm: z.literal(true) }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
       },
-      ({ counterId, requestId }) =>
-        handleTool(() => client.cleanLogRequest(counterId, requestId), limits),
-    );
-  }
+    },
+    (input) =>
+      handleTool(
+        () =>
+          client.createCounter({
+            name: input.name,
+            site2: { site: input.site },
+            gdpr_agreement_accepted: input.gdprAgreementAccepted,
+            time_zone_name: input.timeZoneName,
+            visit_threshold: input.visitThreshold,
+            autogoals_enabled: input.autogoalsEnabled,
+          }),
+        limits,
+      ),
+  );
+
+  server.registerTool(
+    "metrica_update_counter",
+    {
+      title: "Update a Yandex Metrica counter",
+      description: "Update an explicit safe subset of counter settings.",
+      inputSchema: counterUpdateSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    (input) =>
+      handleTool(
+        () =>
+          client.updateCounter(input.counterId, {
+            name: input.name,
+            site2: input.site ? { site: input.site } : undefined,
+            time_zone_name: input.timeZoneName,
+            visit_threshold: input.visitThreshold,
+            autogoals_enabled: input.autogoalsEnabled,
+            favorite: input.favorite,
+          }),
+        limits,
+      ),
+  );
+
+  server.registerTool(
+    "metrica_delete_counter",
+    {
+      title: "Delete a Yandex Metrica counter",
+      description: "Delete one counter. This destructive operation requires confirmation.",
+      inputSchema: z.object({
+        counterId: counterIdSchema,
+        confirm: z.literal(true),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    ({ counterId }) => handleTool(() => client.deleteCounter(counterId), limits),
+  );
+
+  server.registerTool(
+    "metrica_create_grant",
+    {
+      title: "Create a Yandex Metrica counter grant",
+      description: "Grant one user access to a counter.",
+      inputSchema: grantDetailsSchema.extend({
+        counterId: counterIdSchema,
+        confirm: z.literal(true),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    (input) => handleTool(() => client.createGrant(input.counterId, grantBody(input)), limits),
+  );
+
+  server.registerTool(
+    "metrica_update_grant",
+    {
+      title: "Update a Yandex Metrica counter grant",
+      description: "Update one user's counter permission.",
+      inputSchema: grantDetailsSchema.extend({
+        counterId: counterIdSchema,
+        confirm: z.literal(true),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    (input) =>
+      handleTool(
+        () => client.updateGrant(input.counterId, input.userLogin, grantBody(input)),
+        limits,
+      ),
+  );
+
+  server.registerTool(
+    "metrica_delete_grant",
+    {
+      title: "Delete a Yandex Metrica counter grant",
+      description: "Revoke one user's counter access. Requires confirmation.",
+      inputSchema: z.object({
+        counterId: counterIdSchema,
+        userLogin: z.string().min(1).max(255),
+        confirm: z.literal(true),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    ({ counterId, userLogin }) =>
+      handleTool(() => client.deleteGrant(counterId, userLogin), limits),
+  );
+
+  server.registerTool(
+    "metrica_logs_cancel",
+    {
+      title: "Cancel a Metrica Logs API request",
+      description: "Cancel an unfinished raw logs export. Requires explicit confirmation.",
+      inputSchema: z.object({
+        counterId: counterIdSchema,
+        requestId: z.number().int().positive(),
+        confirm: z.literal(true),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    ({ counterId, requestId }) =>
+      handleTool(() => client.cancelLogRequest(counterId, requestId), limits),
+  );
+
+  server.registerTool(
+    "metrica_logs_clean",
+    {
+      title: "Clean a Metrica Logs API request",
+      description:
+        "Delete a completed raw logs request from Yandex. Requires explicit confirmation.",
+      inputSchema: z.object({
+        counterId: counterIdSchema,
+        requestId: z.number().int().positive(),
+        confirm: z.literal(true),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    ({ counterId, requestId }) =>
+      handleTool(() => client.cleanLogRequest(counterId, requestId), limits),
+  );
 }

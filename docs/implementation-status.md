@@ -5,9 +5,9 @@
 - TypeScript/ESM проект, строгая типизация и npm packaging.
 - MCP SDK v1.29.0, `stdio` и Streamable HTTP на Hono.
 - Общий OAuth HTTP-клиент с timeout, retry/backoff и безопасными ошибками.
-- Read-only инструменты Метрики, Reports API и основной lifecycle Logs API.
+- Read-only инструменты Метрики, детали целей и доступов, Reports API и полный lifecycle Logs API.
 - Безопасные пресеты Метрики для органических посадочных страниц и поисковых фраз.
-- Read-only инструменты Webmaster для hosts, indexing, search queries, diagnostics, Sitemap и recrawl queue.
+- Read-only инструменты Webmaster для hosts, verification, indexing, search queries, diagnostics, Sitemap, recrawl queue и статуса приоритетного переобхода Sitemap v4.1.
 - Мониторинг запросов и URL через `query-analytics/list` с типизированными фильтрами и сортировкой.
 - Составные SEO-инструменты для поиска точек роста и сравнения периодов Метрики.
 - Анализ падения органического трафика посадочных страниц между периодами.
@@ -24,7 +24,7 @@
 - Детерминированная кластеризация поисковых запросов и классификация интента.
 - Карта query cluster → landing page, semantic cannibalization и content gap scoring.
 - Evidence-based content briefs с outline, FAQ, schema и internal-link suggestions.
-- Подтверждаемые write-tools: очистка Logs request и постановка URL на переобход.
+- Подтверждаемые write-tools: управление счётчиками и доступами Метрики, host/verification/Sitemap Webmaster, отмена/очистка Logs request и постановка URL/Sitemap на переобход.
 - Ограничения строк/байтов и `structuredContent`.
 - Unit, MCP in-memory, stdio process и HTTP transport тесты.
 - Opt-in live smoke tests.
@@ -39,5 +39,5 @@
 
 - `query-analytics` реализован по официальному контракту; перед публикацией желательно сохранить live fixture с доступного сайта.
 - Webmaster PRO/β endpoints доступны не всем аккаунтам и остаются вне стабильного контракта.
-- Sitemap recrawl v4.1 write-tool: success contract плохо индексируется и должен пройти live contract test.
-- Изменение счетчиков, целей и прав Метрики: не входит в безопасный SEO read-only baseline.
+- Sitemap recrawl v4.1 write-tool требует подтверждения; success contract должен пройти live contract test перед публикацией.
+- Изменение целей Метрики остаётся вне безопасного SEO baseline; счётчики и права доступны через ограниченные подтверждаемые write-tools.

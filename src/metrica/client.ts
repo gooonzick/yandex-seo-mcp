@@ -28,8 +28,70 @@ export class MetricaClient {
     return this.http.request(`management/v1/counter/${counterId}`);
   }
 
+  public createCounter(counter: unknown): Promise<unknown> {
+    return this.http.request("management/v1/counters", {
+      method: "POST",
+      body: { counter },
+      retryable: false,
+    });
+  }
+
+  public updateCounter(counterId: number, counter: unknown): Promise<unknown> {
+    return this.http.request(`management/v1/counter/${counterId}`, {
+      method: "PUT",
+      body: { counter },
+      retryable: false,
+    });
+  }
+
+  public deleteCounter(counterId: number): Promise<unknown> {
+    return this.http.request(`management/v1/counter/${counterId}`, {
+      method: "DELETE",
+      retryable: false,
+    });
+  }
+
   public listGoals(counterId: number): Promise<unknown> {
     return this.http.request(`management/v1/counter/${counterId}/goals`);
+  }
+
+  public getGoal(counterId: number, goalId: number): Promise<unknown> {
+    return this.http.request(`management/v1/counter/${counterId}/goal/${goalId}`);
+  }
+
+  public listGrants(counterId: number): Promise<unknown> {
+    return this.http.request(`management/v1/counter/${counterId}/grants`);
+  }
+
+  public getGrant(counterId: number, userLogin: string): Promise<unknown> {
+    return this.http.request(`management/v1/counter/${counterId}/grant`, {
+      query: { user_login: userLogin },
+    });
+  }
+
+  public createGrant(counterId: number, grant: unknown): Promise<unknown> {
+    return this.http.request(`management/v1/counter/${counterId}/grants`, {
+      method: "POST",
+      body: { grant },
+      retryable: false,
+    });
+  }
+
+  public updateGrant(counterId: number, userLogin: string, grant: unknown): Promise<unknown> {
+    return this.http.request(`management/v1/counter/${counterId}/grant`, {
+      method: "PUT",
+      query: { user_login: userLogin },
+      body: { grant },
+      retryable: false,
+    });
+  }
+
+  public deleteGrant(counterId: number, userLogin: string): Promise<unknown> {
+    return this.http.request(`management/v1/counter/${counterId}/grant`, {
+      method: "DELETE",
+      query: { user_login: userLogin },
+      retryable: false,
+    });
   }
 
   public getReport(query: Record<string, QueryValue>): Promise<unknown> {
@@ -63,6 +125,10 @@ export class MetricaClient {
     return this.http.request(`management/v1/counter/${counterId}/logrequest/${requestId}`);
   }
 
+  public listLogRequests(counterId: number): Promise<unknown> {
+    return this.http.request(`management/v1/counter/${counterId}/logrequests`);
+  }
+
   public downloadLogPart(
     counterId: number,
     requestId: number,
@@ -76,6 +142,13 @@ export class MetricaClient {
 
   public cleanLogRequest(counterId: number, requestId: number): Promise<unknown> {
     return this.http.request(`management/v1/counter/${counterId}/logrequest/${requestId}/clean`, {
+      method: "POST",
+      retryable: false,
+    });
+  }
+
+  public cancelLogRequest(counterId: number, requestId: number): Promise<unknown> {
+    return this.http.request(`management/v1/counter/${counterId}/logrequest/${requestId}/cancel`, {
       method: "POST",
       retryable: false,
     });

@@ -7,7 +7,6 @@ describe("loadConfig", () => {
 
     expect(config.metricaToken).toBe("common-token");
     expect(config.webmasterToken).toBe("common-token");
-    expect(config.enableWriteTools).toBe(false);
     expect(config.httpTimeoutMs).toBe(30_000);
     expect(config.transport).toBe("stdio");
     expect(config.httpMaxConcurrency).toBe(8);
@@ -28,7 +27,6 @@ describe("loadConfig", () => {
       YANDEX_HTTP_MAX_RETRIES: "1",
       YANDEX_MAX_RESULT_ROWS: "25",
       YANDEX_MAX_RESULT_BYTES: "2048",
-      ENABLE_WRITE_TOOLS: "true",
     });
 
     expect(config).toMatchObject({
@@ -38,7 +36,6 @@ describe("loadConfig", () => {
       httpMaxRetries: 1,
       maxResultRows: 25,
       maxResultBytes: 2048,
-      enableWriteTools: true,
       transport: "stdio",
     });
   });

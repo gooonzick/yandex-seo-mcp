@@ -108,7 +108,7 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
           multiUserOAuthConfigured: Boolean(
             config.oauthClientId && config.oauthRedirectUri && config.oauthStorageKey,
           ),
-          writeToolsEnabled: config.enableWriteTools,
+          writeToolsEnabled: true,
           transport: config.transport,
         }),
         limits,

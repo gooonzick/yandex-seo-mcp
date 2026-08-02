@@ -30,10 +30,6 @@ const environmentSchema = z.object({
   YANDEX_OAUTH_REDIRECT_URI: z.url().optional(),
   YANDEX_OAUTH_STORAGE_KEY: z.string().min(32).optional(),
   YANDEX_OAUTH_STORAGE_PATH: z.string().min(1).default(".yandex-seo-oauth.enc"),
-  ENABLE_WRITE_TOOLS: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((value) => value === "true"),
   MCP_TRANSPORT: z.enum(["stdio", "http"]).default("stdio"),
   MCP_HTTP_HOST: z.string().min(1).default("127.0.0.1"),
   MCP_HTTP_PORT: z.coerce.number().int().min(1).max(65_535).default(3_000),
@@ -68,7 +64,6 @@ export interface AppConfig {
   oauthRedirectUri?: string;
   oauthStorageKey?: string;
   oauthStoragePath?: string;
-  enableWriteTools: boolean;
   transport: "stdio" | "http";
   httpHost: string;
   httpPort: number;
@@ -120,7 +115,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     crawlerUserAgent: parsed.CRAWLER_USER_AGENT,
     queryClusterThreshold: parsed.QUERY_CLUSTER_THRESHOLD,
     queryMaxQueries: parsed.QUERY_MAX_QUERIES,
-    enableWriteTools: parsed.ENABLE_WRITE_TOOLS,
     transport: parsed.MCP_TRANSPORT,
     httpHost: parsed.MCP_HTTP_HOST,
     httpPort: parsed.MCP_HTTP_PORT,

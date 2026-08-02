@@ -56,7 +56,7 @@ export function registerMcpContent(
           externalAiUsed: false,
         },
         oauthPkceConfigured: Boolean(config.oauthClientId && config.oauthRedirectUri),
-        writeToolsEnabled: config.enableWriteTools,
+        writeToolsEnabled: true,
       }),
   );
 

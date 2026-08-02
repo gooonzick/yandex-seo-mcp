@@ -168,7 +168,7 @@ MCP-слой не должен знать URL Яндекса. Он валиди�
 
 Для каждой операции нужны:
 
-1. отдельная настройка `ENABLE_WRITE_TOOLS`;
+1. обязательное явное подтверждение на уровне MCP tool;
 2. read-before-write и показ текущего состояния;
 3. точная схема входа без произвольного JSON;
 4. аннотация destructive/idempotent;
@@ -275,7 +275,7 @@ MCP-слой не должен знать URL Яндекса. Он валиди�
 ### Этап 6 — write-tools
 
 - добавлять по одному use case после threat review;
-- feature flags, annotations, confirmations и audit;
+- annotations, confirmations и audit;
 - live tests только в изолированном тестовом окружении.
 
 ## 11. Критерии готовности MVP
@@ -296,7 +296,7 @@ MCP-слой не должен знать URL Яндекса. Он валиди�
 | Большие отчеты переполняют контекст    | Presets, limits, cursor, aggregation, file artifacts                        |
 | Нестабильные квоты                     | Backoff, concurrency limit, cache metadata, измерение в spike               |
 | Sampling/скрытие чувствительных данных | Явно возвращать metadata и предупреждения                                   |
-| Случайные изменения данных             | Read-only default, write feature flag, confirmations                        |
+| Случайные изменения данных             | Строгие схемы, annotations и обязательные confirmations                     |
 | Изменения API                          | Contract fixtures, permissive response parsing, регулярные live smoke tests |
 
 ## 13. Первые задачи в backlog

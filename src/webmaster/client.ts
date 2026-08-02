@@ -18,11 +18,16 @@ interface UserResponse {
 
 export class WebmasterClient {
   private readonly http: YandexHttpClient;
+  private readonly httpV41: YandexHttpClient;
   private userIdPromise?: Promise<number>;
 
   public constructor(options: WebmasterClientOptions) {
     this.http = new YandexHttpClient({
       baseUrl: "https://api.webmaster.yandex.net/v4/",
+      ...options,
+    });
+    this.httpV41 = new YandexHttpClient({
+      baseUrl: "https://api.webmaster.yandex.net/v4.1/",
       ...options,
     });
   }
@@ -54,6 +59,21 @@ export class WebmasterClient {
 
   public async getHost(hostId: string): Promise<unknown> {
     return this.http.request(await this.hostPath(hostId));
+  }
+
+  public async addHost(hostUrl: string): Promise<unknown> {
+    return this.http.request(await this.hostPath(), {
+      method: "POST",
+      body: { host_url: hostUrl },
+      retryable: false,
+    });
+  }
+
+  public async deleteHost(hostId: string): Promise<unknown> {
+    return this.http.request(await this.hostPath(hostId), {
+      method: "DELETE",
+      retryable: false,
+    });
   }
 
   public async getSummary(hostId: string): Promise<unknown> {
@@ -118,6 +138,42 @@ export class WebmasterClient {
     return this.http.request(`${await this.hostPath(hostId)}/user-added-sitemaps`, { query });
   }
 
+  public async getUserSitemap(hostId: string, sitemapId: string): Promise<unknown> {
+    return this.http.request(
+      `${await this.hostPath(hostId)}/user-added-sitemaps/${encodeURIComponent(sitemapId)}`,
+    );
+  }
+
+  public async addUserSitemap(hostId: string, url: string): Promise<unknown> {
+    return this.http.request(`${await this.hostPath(hostId)}/user-added-sitemaps`, {
+      method: "POST",
+      body: { url },
+      retryable: false,
+    });
+  }
+
+  public async deleteUserSitemap(hostId: string, sitemapId: string): Promise<unknown> {
+    return this.http.request(
+      `${await this.hostPath(hostId)}/user-added-sitemaps/${encodeURIComponent(sitemapId)}`,
+      {
+        method: "DELETE",
+        retryable: false,
+      },
+    );
+  }
+
+  public async getVerification(hostId: string): Promise<unknown> {
+    return this.http.request(`${await this.hostPath(hostId)}/verification`);
+  }
+
+  public async requestVerification(hostId: string, verificationType: string): Promise<unknown> {
+    return this.http.request(`${await this.hostPath(hostId)}/verification`, {
+      method: "POST",
+      query: { verification_type: verificationType },
+      retryable: false,
+    });
+  }
+
   public async getIndexingSamples(
     hostId: string,
     query: Record<string, QueryValue>,
@@ -170,5 +226,19 @@ export class WebmasterClient {
       body: { url },
       retryable: false,
     });
+  }
+
+  public async getSitemapRecrawlStatus(hostId: string): Promise<unknown> {
+    return this.httpV41.request(`${await this.hostPath(hostId)}/sitemaps/recrawl`);
+  }
+
+  public async requestSitemapRecrawl(hostId: string, sitemapId: string): Promise<unknown> {
+    return this.httpV41.request(
+      `${await this.hostPath(hostId)}/sitemaps/${encodeURIComponent(sitemapId)}/recrawl`,
+      {
+        method: "POST",
+        retryable: false,
+      },
+    );
   }
 }

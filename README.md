@@ -6,12 +6,13 @@ recrawling, and the Metrica Logs API.
 
 ## Features
 
-- Yandex Metrica counters, goals, custom reports, trends, organic landing-page
-  and search-phrase presets.
-- Metrica Logs API evaluation, creation, status checks, and size-limited TSV
-  downloads.
-- Yandex Webmaster sites, summaries, indexing status, indexed pages, search
-  queries, query/URL analytics, diagnostics, sitemaps, and recrawl requests.
+- Yandex Metrica counters, goal details, access grants, custom reports, trends,
+  organic landing-page and search-phrase presets.
+- Metrica Logs API evaluation, creation, request listing, status checks, cancellation,
+  cleanup, and size-limited TSV downloads.
+- Yandex Webmaster sites, ownership verification, summaries, indexing status,
+  indexed pages, search queries, query/URL analytics, diagnostics, user-added
+  Sitemaps, URL recrawl requests, and priority Sitemap recrawl status/actions.
 - Cross-service page analysis, growth forecasting, cannibalization detection,
   content decay, period comparisons, and a compact site audit.
 - Safe Metrica segment and attribution presets for devices, regions, visitor
@@ -22,7 +23,7 @@ recrawling, and the Metrica Logs API.
   report, incident-analysis and backlog prompts.
 - `stdio` transport for local MCP clients.
 - Streamable HTTP transport powered by Hono.
-- Write tools disabled by default.
+- Write tools always registered and protected by explicit confirmation.
 - OAuth tokens are never accepted as tool arguments or returned in responses.
 - Retries for `429` and `5xx`, bounded concurrency, short-lived GET caching,
   request telemetry, inbound rate limiting, Zod validation, and result limits.
@@ -271,7 +272,6 @@ reproducible and lexical; editorial and live SERP validation are still required.
 | `CRAWLER_USER_AGENT`             | `YandexSeoMcpBot/1.0`      | Crawler HTTP user agent                     |
 | `QUERY_CLUSTER_THRESHOLD`        | `0.42`                     | Minimum lexical clustering similarity       |
 | `QUERY_MAX_QUERIES`              | `500`                      | Maximum Webmaster queries per analysis      |
-| `ENABLE_WRITE_TOOLS`             | `false`                    | Enable confirmed write tools                |
 | `MCP_TRANSPORT`                  | `stdio`                    | Transport: `stdio` or `http`                |
 | `MCP_HTTP_HOST`                  | `127.0.0.1`                | HTTP bind address                           |
 | `MCP_HTTP_PORT`                  | `3000`                     | HTTP port                                   |
@@ -291,8 +291,8 @@ See [.env.example](.env.example) for a complete configuration template.
 - Both upstream API base URLs are fixed, preventing tool arguments from causing
   SSRF.
 - Logs API downloads are always constrained by the MCP response-size limit.
-- `metrica_logs_clean` and `webmaster_request_recrawl` are registered only when
-  `ENABLE_WRITE_TOOLS=true`, and both require `confirm: true`.
+- Counter/grant management, host/verification/Sitemap management, Logs cleanup
+  and cancellation, and recrawl actions require `confirm: true`.
 - Errors return safe categories and request IDs without exposing authorization
   headers.
 - Monitoring files use owner-only permissions; OAuth tokens are encrypted at

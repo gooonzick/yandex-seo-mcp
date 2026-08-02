@@ -10,7 +10,6 @@ const baseConfig: AppConfig = {
   httpMaxRetries: 0,
   maxResultRows: 100,
   maxResultBytes: 100_000,
-  enableWriteTools: false,
   transport: "http",
   httpHost: "127.0.0.1",
   httpPort: 3_000,

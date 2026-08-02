@@ -70,6 +70,25 @@
 
 Примечание: тот же список можно запросить как часть счётчика через `GET .../counter/{counterId}?field=goals`; отдельный `/goals` удобнее для MCP-контракта.
 
+## Управление счётчиками и доступами
+
+Официальные Management API методы, используемые feature-gated write-tools:
+
+- `POST /management/v1/counters` с телом `{ "counter": CounterEdit }` создаёт счётчик;
+- `PUT /management/v1/counter/{counterId}` с тем же envelope изменяет счётчик;
+- `DELETE /management/v1/counter/{counterId}` удаляет счётчик и возвращает `{ "success": true }`;
+- `GET /management/v1/counter/{counterId}/grants` возвращает `{ grants: Grant[] }`;
+- `GET /management/v1/counter/{counterId}/grant?user_login=...` возвращает `{ grant: Grant }`;
+- `POST /management/v1/counter/{counterId}/grants` с `{ "grant": Grant }` выдаёт доступ;
+- `PUT /management/v1/counter/{counterId}/grant?user_login=...` изменяет доступ;
+- `DELETE /management/v1/counter/{counterId}/grant?user_login=...` отзывает доступ.
+
+Допустимые уровни пользовательского доступа: `view`, `edit`, `analyst`,
+`analyst_access_filter`. Публичный доступ использует отдельный `/public_grant` и не
+смешивается с пользовательским grant. MCP не принимает произвольный `CounterEdit`:
+разрешён только ограниченный набор полей, нужный SEO-сценариям. Все write-tools требуют
+`confirm: true`.
+
 ## Reports API: таблица
 
 `GET /stat/v1/data`
@@ -202,9 +221,11 @@
 
 `POST /management/v1/counter/{counterId}/logrequest/{requestId}/clean`
 
-Body и query отсутствуют. Ответ `200`: `{ log_request: LogRequest }`, ожидаемый статус `cleaned_by_user`. Это изменяющая состояние операция: отдельный write-feature flag и явное подтверждение на уровне MCP.
+Body и query отсутствуют. Ответ `200`: `{ log_request: LogRequest }`, ожидаемый статус `cleaned_by_user`. Это изменяющая состояние операция с явным подтверждением на уровне MCP.
 
-Дополнительно API имеет `POST .../cancel` для ещё не обработанного запроса, но он не входит в требуемый минимум.
+Для ещё не обработанного запроса доступен `POST .../cancel`. Это изменяющая состояние
+операция без автоматического retry; MCP tool регистрируется только при включенных write-tools
+и требует явного подтверждения.
 
 ### Квоты и эксплуатация
 
@@ -232,6 +253,11 @@ Body и query отсутствуют. Ответ `200`: `{ log_request: LogReque
 - [Авторизация](https://yandex.ru/dev/metrika/en/intro/authorization)
 - [Список счётчиков](https://yandex.ru/dev/metrika/en/management/openapi/counter/counters)
 - [Информация о счётчике](https://yandex.ru/dev/metrika/en/management/openapi/counter/counter)
+- [Создание счётчика](https://yandex.ru/dev/metrika/ru/management/openapi/counter/addCounter)
+- [Изменение счётчика](https://yandex.ru/dev/metrika/ru/management/openapi/counter/editCounter)
+- [Удаление счётчика](https://yandex.ru/dev/metrika/ru/management/openapi/counter/deleteCounter)
+- [Список доступов](https://yandex.ru/dev/metrika/ru/management/openapi/grant/grants)
+- [Информация о доступе](https://yandex.ru/dev/metrika/ru/management/openapi/grant/grant)
 - [Reports: table](https://yandex.ru/dev/metrika/en/stat/openapi/data)
 - [Reports: by time](https://yandex.ru/dev/metrika/en/stat/openapi/bytime)
 - [Logs: quick start](https://yandex.ru/dev/metrika/en/logs/practice/quick-start)

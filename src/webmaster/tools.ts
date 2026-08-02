@@ -6,6 +6,7 @@ import { WebmasterClient } from "./client.js";
 
 const hostIdSchema = z.string().min(1).max(2_000);
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
+const verificationTypeSchema = z.enum(["DNS", "HTML_FILE", "META_TAG"]);
 const periodSchema = z.object({
   hostId: hostIdSchema,
   dateFrom: dateSchema,
@@ -80,6 +81,17 @@ export function registerWebmasterTools(
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     ({ hostId }) => handleTool(() => client.getHost(hostId), limits),
+  );
+
+  server.registerTool(
+    "webmaster_get_verification",
+    {
+      title: "Get Yandex Webmaster verification state",
+      description: "Get current ownership verification state, code and applicable methods.",
+      inputSchema: z.object({ hostId: hostIdSchema }),
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    },
+    ({ hostId }) => handleTool(() => client.getVerification(hostId), limits),
   );
 
   server.registerTool(
@@ -377,6 +389,20 @@ export function registerWebmasterTools(
   );
 
   server.registerTool(
+    "webmaster_get_user_sitemap",
+    {
+      title: "Get a user-added Sitemap",
+      description: "Get details for one Sitemap explicitly added in Yandex Webmaster.",
+      inputSchema: z.object({
+        hostId: hostIdSchema,
+        sitemapId: z.string().min(1).max(2_000),
+      }),
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    },
+    ({ hostId, sitemapId }) => handleTool(() => client.getUserSitemap(hostId, sitemapId), limits),
+  );
+
+  server.registerTool(
     "webmaster_get_recrawl_quota",
     {
       title: "Get URL recrawl quota",
@@ -428,26 +454,156 @@ export function registerWebmasterTools(
     ({ hostId, taskId }) => handleTool(() => client.getRecrawlTask(hostId, taskId), limits),
   );
 
-  if (config.enableWriteTools) {
-    server.registerTool(
-      "webmaster_request_recrawl",
-      {
-        title: "Request URL recrawl in Yandex",
-        description:
-          "Submit one URL to the recrawl queue. Write tools must be enabled and confirmation is required.",
-        inputSchema: z.object({
-          hostId: hostIdSchema,
-          url: z.string().url(),
-          confirm: z.literal(true),
-        }),
-        annotations: {
-          readOnlyHint: false,
-          destructiveHint: false,
-          idempotentHint: true,
-          openWorldHint: true,
-        },
+  server.registerTool(
+    "webmaster_get_sitemap_recrawl_status",
+    {
+      title: "Get Sitemap recrawl status",
+      description: "Get the current priority Sitemap recrawl state and monthly quota.",
+      inputSchema: z.object({ hostId: hostIdSchema }),
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    },
+    ({ hostId }) => handleTool(() => client.getSitemapRecrawlStatus(hostId), limits),
+  );
+
+  server.registerTool(
+    "webmaster_add_host",
+    {
+      title: "Add a site to Yandex Webmaster",
+      description: "Add one HTTP or HTTPS site to the configured user's host list.",
+      inputSchema: z.object({
+        hostUrl: z.string().url(),
+        confirm: z.literal(true),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
       },
-      ({ hostId, url }) => handleTool(() => client.requestRecrawl(hostId, url), limits),
-    );
-  }
+    },
+    ({ hostUrl }) => handleTool(() => client.addHost(hostUrl), limits),
+  );
+
+  server.registerTool(
+    "webmaster_delete_host",
+    {
+      title: "Delete a site from Yandex Webmaster",
+      description: "Remove one site from the configured user's host list.",
+      inputSchema: z.object({
+        hostId: hostIdSchema,
+        confirm: z.literal(true),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    ({ hostId }) => handleTool(() => client.deleteHost(hostId), limits),
+  );
+
+  server.registerTool(
+    "webmaster_request_verification",
+    {
+      title: "Request Yandex Webmaster site verification",
+      description: "Start ownership verification using DNS, HTML file or meta tag.",
+      inputSchema: z.object({
+        hostId: hostIdSchema,
+        verificationType: verificationTypeSchema,
+        confirm: z.literal(true),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    ({ hostId, verificationType }) =>
+      handleTool(() => client.requestVerification(hostId, verificationType), limits),
+  );
+
+  server.registerTool(
+    "webmaster_add_user_sitemap",
+    {
+      title: "Add a Sitemap to Yandex Webmaster",
+      description: "Add one Sitemap URL to a verified site.",
+      inputSchema: z.object({
+        hostId: hostIdSchema,
+        url: z.string().url(),
+        confirm: z.literal(true),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    ({ hostId, url }) => handleTool(() => client.addUserSitemap(hostId, url), limits),
+  );
+
+  server.registerTool(
+    "webmaster_delete_user_sitemap",
+    {
+      title: "Delete a Sitemap from Yandex Webmaster",
+      description: "Delete one user-added Sitemap from a verified site.",
+      inputSchema: z.object({
+        hostId: hostIdSchema,
+        sitemapId: z.string().min(1).max(2_000),
+        confirm: z.literal(true),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    ({ hostId, sitemapId }) =>
+      handleTool(() => client.deleteUserSitemap(hostId, sitemapId), limits),
+  );
+
+  server.registerTool(
+    "webmaster_request_recrawl",
+    {
+      title: "Request URL recrawl in Yandex",
+      description: "Submit one URL to the recrawl queue. Explicit confirmation is required.",
+      inputSchema: z.object({
+        hostId: hostIdSchema,
+        url: z.string().url(),
+        confirm: z.literal(true),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    ({ hostId, url }) => handleTool(() => client.requestRecrawl(hostId, url), limits),
+  );
+
+  server.registerTool(
+    "webmaster_request_sitemap_recrawl",
+    {
+      title: "Request priority Sitemap recrawl",
+      description:
+        "Start a priority recrawl for one known Sitemap. Explicit confirmation is required.",
+      inputSchema: z.object({
+        hostId: hostIdSchema,
+        sitemapId: z.string().min(1).max(2_000),
+        confirm: z.literal(true),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    ({ hostId, sitemapId }) =>
+      handleTool(() => client.requestSitemapRecrawl(hostId, sitemapId), limits),
+  );
 }
