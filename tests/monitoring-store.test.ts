@@ -69,4 +69,40 @@ describe("MonitoringStore", () => {
     expect(migrated.version).toBe(2);
     expect(migrated.monitoringSnapshots.map(({ id }) => id)).toContain("legacy-snapshot");
   });
+
+  it("paginates snapshots with a cursor bound to target filters", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "yandex-seo-monitor-pages-"));
+    const store = new MonitoringStore(join(directory, "snapshots.json"), 90);
+    const added = await Promise.all(
+      ["first", "second", "third"].map((target) =>
+        store.add({
+          target,
+          hostId: `https:${target}.example.com:443`,
+          summary: {},
+          diagnostics: {},
+          sitemaps: {},
+        }),
+      ),
+    );
+    await store.add({
+      target: "first",
+      hostId: "https:first.example.com:443",
+      summary: {},
+      diagnostics: {},
+      sitemaps: {},
+    });
+
+    const firstPage = await store.listPage("first", undefined, 1);
+    expect(firstPage.items).toHaveLength(1);
+    expect(firstPage.pageInfo).toMatchObject({ hasMore: true, limit: 1 });
+    const secondPage = await store.listPage("first", firstPage.pageInfo.nextCursor!, 1);
+    expect(secondPage.items).toHaveLength(1);
+    expect(secondPage.items[0]?.id).not.toBe(firstPage.items[0]?.id);
+    expect(secondPage.pageInfo).toMatchObject({ hasMore: false, nextCursor: null });
+    expect(added.map(({ id }) => id)).toContain(secondPage.items[0]?.id);
+
+    await expect(store.listPage("second", firstPage.pageInfo.nextCursor!, 1)).rejects.toThrow(
+      /Invalid or incompatible pagination cursor/,
+    );
+  });
 });

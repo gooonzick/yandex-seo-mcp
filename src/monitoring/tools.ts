@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { AppConfig, MonitorTarget } from "../config.js";
 import type { MetricaClient } from "../metrica/client.js";
 import { handleTool, type ResultLimits } from "../shared/result.js";
+import { createPaginationInputSchema } from "../shared/pagination.js";
 import type { WebmasterClient } from "../webmaster/client.js";
 import { MonitoringStore, type MonitoringSnapshot } from "./store.js";
 
@@ -274,14 +275,16 @@ export function registerMonitoringTools(
     {
       title: "List SEO monitoring snapshots",
       description: "Read recent persisted snapshots, optionally filtered by target name.",
-      inputSchema: z.object({
+      inputSchema: createPaginationInputSchema(200, 50).extend({
         target: z.string().min(1).max(100).optional(),
-        limit: z.number().int().min(1).max(200).default(50),
       }),
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
-    ({ target, limit }) =>
-      handleTool(async () => ({ snapshots: await store.list(target, limit) }), limits),
+    ({ target, cursor, limit }) =>
+      handleTool(async () => {
+        const page = await store.listPage(target, cursor, limit);
+        return { snapshots: page.items, pageInfo: page.pageInfo };
+      }, limits),
   );
 
   server.registerTool(

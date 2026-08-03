@@ -266,6 +266,7 @@ describe("Yandex SEO MCP server", () => {
     expect(names).toContain("metrica_get_segment_performance");
     expect(names).toContain("metrica_compare_segments");
     expect(names).toContain("monitor_capture_snapshot");
+    expect(names).toContain("monitor_list_snapshots");
     expect(names).toContain("monitor_check_alerts");
     expect(names).toContain("crawler_audit_site");
     expect(names).toContain("crawler_save_snapshot");
@@ -313,6 +314,49 @@ describe("Yandex SEO MCP server", () => {
     expect(saved.isError).not.toBe(true);
     expect(saved.structuredContent).toMatchObject({ runId, created: true, dryRun: false });
     expect(repeated.structuredContent).toMatchObject({ runId, created: false, dryRun: false });
+  });
+
+  it("paginates monitoring snapshots with an opaque cursor", async () => {
+    for (let index = 0; index < 2; index += 1) {
+      const captured = await client.callTool({
+        name: "monitor_capture_snapshot",
+        arguments: { name: "production", hostId: "https:example.com:443" },
+      });
+      expect(captured.isError).not.toBe(true);
+    }
+
+    const first = await client.callTool({
+      name: "monitor_list_snapshots",
+      arguments: { target: "production", limit: 1 },
+    });
+    const firstContent = first.structuredContent as
+      | { snapshots?: Array<{ id: string }>; pageInfo?: { nextCursor?: string; hasMore?: boolean } }
+      | undefined;
+    expect(firstContent).toMatchObject({ snapshots: [{}], pageInfo: { hasMore: true } });
+
+    const second = await client.callTool({
+      name: "monitor_list_snapshots",
+      arguments: {
+        target: "production",
+        limit: 1,
+        cursor: firstContent?.pageInfo?.nextCursor,
+      },
+    });
+    expect(second.isError).not.toBe(true);
+    expect(second.structuredContent).toMatchObject({
+      snapshots: [{}],
+      pageInfo: { hasMore: false, nextCursor: null },
+    });
+    expect(
+      (second.structuredContent as { snapshots?: Array<{ id: string }> }).snapshots?.[0]?.id,
+    ).not.toBe(firstContent?.snapshots?.[0]?.id);
+
+    const invalid = await client.callTool({
+      name: "monitor_list_snapshots",
+      arguments: { target: "production", cursor: "malformed-cursor" },
+    });
+    expect(invalid.isError).toBe(true);
+    expect(invalid.structuredContent).toMatchObject({ code: "VALIDATION" });
   });
 
   it("returns capabilities without making HTTP requests", async () => {

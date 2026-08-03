@@ -211,6 +211,10 @@ MONITOR_INTERVAL_MS=3600000
 MONITOR_TARGETS_JSON=[{"name":"production","hostId":"https:example.com:443","counterId":123}]
 ```
 
+`monitor_list_snapshots` accepts `limit` and an opaque `cursor`, returning
+`snapshots` with `{ limit, hasMore, nextCursor }` in `pageInfo`. Cursors are bound
+to the target filter; restart without a cursor after changing filters.
+
 ### Technical crawler
 
 The crawler exposes:
@@ -242,6 +246,8 @@ also include the related URL so separate broken links are not deduplicated.
 
 The versioned crawl-history storage model and migration contract are documented
 in [`docs/architecture/crawl-snapshot-storage.md`](docs/architecture/crawl-snapshot-storage.md).
+The shared cursor contract is documented in
+[`docs/architecture/cursor-pagination.md`](docs/architecture/cursor-pagination.md).
 
 ### Query Intelligence
 

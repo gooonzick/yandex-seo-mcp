@@ -21,6 +21,8 @@
   partial-run markers, query denylist, dry-run/confirmation и storage telemetry.
 - Стабильный crawl issue fingerprint `v2` для redirect, canonical, metadata,
   indexing и link issues с backward-compatible чтением fingerprint `v1`.
+- Единый keyset cursor pagination contract: versioned opaque cursor, filter/order
+  binding, normalized errors и `pageInfo`; применен в `monitor_list_snapshots`.
 - MCP resources и prompts для типовых SEO workflow.
 - GET cache, bounded concurrency, HTTP rate limiting, telemetry и readiness endpoint.
 - Multi-user OAuth Authorization Code + PKCE, encrypted profile storage и изолированные bearer sessions.

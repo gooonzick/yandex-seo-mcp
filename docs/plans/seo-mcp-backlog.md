@@ -397,9 +397,15 @@ HTTP status и другие изменчивые details не входят в id
 
 ### ENG-002 — Cursor pagination contract
 
+- Статус: `completed` (2026-08-03)
 - Приоритет: `P0`
 - Размер: `M`
 - Scope: единая схема для snapshots, actions, jobs и больших API-выборок.
+
+Реализация: общий versioned opaque cursor, canonical filter scope, keyset ordering,
+единые `limit`/`cursor` inputs и `pageInfo` output, нормализованные validation errors.
+Референсная интеграция — `monitor_list_snapshots`; контракт и правила стабильного
+ключа зафиксированы в [architecture/cursor-pagination.md](../architecture/cursor-pagination.md).
 
 ### ENG-003 — Artifact resources
 

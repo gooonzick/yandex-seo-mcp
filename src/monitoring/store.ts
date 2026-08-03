@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { StorageFile } from "../storage/file-store.js";
 import type { MonitoringSnapshot, StorageData } from "../storage/schema.js";
+import { createPaginationScope, paginateByKey, type CursorPage } from "../shared/pagination.js";
 
 export type { MonitoringSnapshot } from "../storage/schema.js";
 
@@ -34,6 +35,24 @@ export class MonitoringStore {
       .filter((snapshot) => !target || snapshot.target === target)
       .sort((left, right) => right.capturedAt.localeCompare(left.capturedAt))
       .slice(0, limit);
+  }
+
+  public async listPage(
+    target: string | undefined,
+    cursor: string | undefined,
+    limit: number,
+  ): Promise<CursorPage<MonitoringSnapshot>> {
+    const data = this.prune(await this.storage.read());
+    return paginateByKey(
+      data.monitoringSnapshots.filter((snapshot) => !target || snapshot.target === target),
+      {
+        scope: createPaginationScope("monitoring-snapshots", { target }),
+        cursor,
+        limit,
+        order: "desc",
+        getKey: (snapshot) => `${snapshot.capturedAt}\0${snapshot.id}`,
+      },
+    );
   }
 
   private prune(data: StorageData): StorageData {
