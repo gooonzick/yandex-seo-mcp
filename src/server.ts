@@ -177,7 +177,7 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
   registerMonitoringTools(server, monitoring, metrica, webmaster, config);
   registerMcpContent(server, metrica, webmaster, monitoring, config);
   registerCrawlerTools(server, crawler, crawlSnapshots, webmaster, config);
-  registerSeoImpactTools(server, seoChanges, crawlSnapshots, metrica, config);
+  registerSeoImpactTools(server, seoChanges, crawlSnapshots, metrica, webmaster, config);
   registerQueryIntelligenceTools(server, webmaster, crawler, config);
 
   return { server, metrica, webmaster, monitoring, crawler, crawlSnapshots, seoChanges };

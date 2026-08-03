@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { AppConfig } from "../config.js";
 import type { CrawlSnapshotStore } from "../crawler/snapshot-store.js";
 import type { MetricaClient } from "../metrica/client.js";
+import type { WebmasterClient } from "../webmaster/client.js";
 import { YandexApiError } from "../shared/errors.js";
 import { createPaginationInputSchema } from "../shared/pagination.js";
 import { handleTool } from "../shared/result.js";
@@ -10,6 +11,7 @@ import { telemetry } from "../shared/telemetry.js";
 import { seoChangeTypeSchema } from "../storage/schema.js";
 import type { SeoChangeStore } from "./change-store.js";
 import { isTimezoneOffset, measureMetricaImpact } from "./metrica-impact.js";
+import { measureWebmasterImpact } from "./webmaster-impact.js";
 
 const recordChangeSchema = z.object({
   target: z.url(),
@@ -56,11 +58,34 @@ const measureChangeMetricaSchema = z.object({
   accuracy: z.union([z.literal("full"), z.number().min(0).max(1)]).optional(),
 });
 
+const measureChangeWebmasterSchema = z.object({
+  changeId: z.uuid(),
+  hostId: z.string().min(1).max(2_000),
+  periodDays: z.number().int().min(1).max(7).default(3),
+  dataDelayDays: z.number().int().min(0).max(14).default(2),
+  minImpressions: z.number().int().nonnegative().default(100),
+  sourceLimit: z.number().int().min(1).max(500).default(500),
+  resultLimit: z.number().int().min(1).max(100).default(25),
+  deviceType: z.enum(["ALL", "DESKTOP", "MOBILE_AND_TABLET", "MOBILE", "TABLET"]).default("ALL"),
+  searchLocation: z
+    .enum([
+      "ALL_LOCATIONS",
+      "ALL_LOCATIONS_ORGANIC",
+      "WEB_LOCATION",
+      "DYNAMIC_LOCATION_ALL",
+      "DYNAMIC_LOCATION_BASIC",
+      "DYNAMIC_LOCATION_ADDITIONAL",
+    ])
+    .default("WEB_LOCATION"),
+  regionIds: z.array(z.number().int().positive()).max(100).optional(),
+});
+
 export function registerSeoImpactTools(
   server: McpServer,
   store: SeoChangeStore,
   crawlSnapshots: CrawlSnapshotStore,
   metrica: MetricaClient,
+  webmaster: WebmasterClient,
   config: AppConfig,
 ): void {
   const limits = { maxRows: config.maxResultRows, maxBytes: config.maxResultBytes };
@@ -141,6 +166,28 @@ export function registerSeoImpactTools(
           result.status === "measured"
             ? "seo_change_metrica_measured"
             : "seo_change_metrica_insufficient_data",
+        );
+        return result;
+      }, limits),
+  );
+  server.registerTool(
+    "seo_measure_change_webmaster",
+    {
+      title: "Measure an SEO change in Webmaster",
+      description:
+        "Compare URL-scoped Yandex search visibility and target-level indexing events around a journaled change, with explicit data-delay and confidence limits.",
+      inputSchema: measureChangeWebmasterSchema,
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    },
+    (input) =>
+      handleTool(async () => {
+        const change = await store.get(input.changeId);
+        if (!change) throw new YandexApiError("NOT_FOUND", "SEO change was not found");
+        const result = await measureWebmasterImpact(webmaster, change, input);
+        telemetry.event(
+          result.status === "measured"
+            ? "seo_change_webmaster_measured"
+            : "seo_change_webmaster_insufficient_data",
         );
         return result;
       }, limits),

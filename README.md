@@ -296,7 +296,10 @@ in [`docs/architecture/crawl-snapshot-storage.md`](docs/architecture/crawl-snaps
   a tool error;
 - `seo_measure_change_metrica` compares equal 1–12-week organic periods around
   a journal entry. It reports scoped visits, users, derived conversions and
-  bounded landing-page deltas with confidence and explicit data limitations.
+  bounded landing-page deltas with confidence and explicit data limitations;
+- `seo_measure_change_webmaster` compares URL-level impressions, clicks, CTR and
+  position around a journal entry after a configurable data-delay gap, alongside
+  target-level appeared/removed-in-search events.
 
 Each entry has a bounded description, external reference and up to 500
 same-origin scope URLs. An empty scope means the whole target. Repeating the same
@@ -310,6 +313,12 @@ sides have the same weekday mix. Low traffic or an incomplete post-change period
 returns `insufficient_data`; sampling, data lag and landing-page source limits
 reduce confidence. The result is observational evidence only and always exposes
 `causalClaim: false`.
+
+Webmaster impact is constrained by the Query Analytics two-week window and its
+bounded source rows. A post-change period that is not yet expected after the
+configured delay returns `insufficient_data`. Search visibility honors the
+change URL scope; the public indexing-events endpoint is target-level, which is
+reported as a limitation for scoped changes.
 The shared cursor contract is documented in
 [`docs/architecture/cursor-pagination.md`](docs/architecture/cursor-pagination.md).
 

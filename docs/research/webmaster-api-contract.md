@@ -193,6 +193,11 @@ Query: repeatable `query_indicator?`, `device_type_indicator?` (default `ALL`), 
 ### Дополнительные контракты
 
 - `POST /v4/user/{user-id}/hosts/{host-id}/query-analytics/list` — актуальный метод мониторинга запросов и URL за последние две недели; лимит 10 000 запросов в час, затем `429`. Реализован с типизированными filters, sort, regions, device/search location/statistic enums; перед публикацией желательно сохранить отдельный live fixture. Источник: [мониторинг запросов](https://yandex.ru/dev/webmaster/doc/ru/reference/host-query-analytics).
+- `seo_measure_change_webmaster` использует этот endpoint с
+  `text_indicator=URL`, локально разделяет датированные statistics на равные
+  периоды и учитывает ограниченное двухнедельное окно. История
+  `search-urls/events/history` не имеет URL dimension, поэтому indexing events в
+  impact-контракте всегда помечены как target-level.
 - `/v4/user/{user-id}/hosts/{host-id}/pro/serp/...` — PRO/β выгрузка по URL, асинхронная и с отдельными лимитами/доступностью дат. Не считать общедоступным API. Источник: [расширенная выгрузка β](https://yandex.ru/dev/webmaster/doc/ru/reference/enhanced-export).
 
 ## Диагностика

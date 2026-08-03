@@ -45,6 +45,9 @@
 - Observational Metrica impact via `seo_measure_change_metrica`: equal whole-week
   organic periods around a journal entry, scoped visits/users/conversions and
   landing-page deltas, minimum-volume gates plus sampling/data-lag limitations.
+- Observational Webmaster impact via `seo_measure_change_webmaster`: URL-scoped
+  impressions/clicks/CTR/position, target-level search indexing events and an
+  explicit data-delay/readiness model with confidence limitations.
 - MCP resources и prompts для типовых SEO workflow.
 - GET cache, bounded concurrency, HTTP rate limiting, telemetry и readiness endpoint.
 - Multi-user OAuth Authorization Code + PKCE, encrypted profile storage и изолированные bearer sessions.

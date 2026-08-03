@@ -1,7 +1,7 @@
 # SEO change journal
 
-Status: journal, crawl correlation and Metrica impact implemented by
-`IMP-001`–`IMP-003` on 2026-08-03.
+Status: journal, crawl correlation, Metrica impact and Webmaster impact
+implemented by `IMP-001`–`IMP-004` on 2026-08-03.
 
 ## Storage contract
 
@@ -77,3 +77,24 @@ post-change interval is available. Otherwise it is `insufficient_data`, while
 still returning observed values. Confidence accounts for minimum volume,
 sampling, `data_lag` and source truncation. Limitations always state that the
 association is observational; `causalClaim` is fixed to `false`.
+
+## Webmaster impact
+
+`seo_measure_change_webmaster` builds equal 1–7-day periods around the journal
+timestamp. The change date is excluded and `dataDelayDays` inserts a gap before
+the post-change period. The same delay determines the latest date on which data
+is expected; an immature post-period returns `insufficient_data` while retaining
+the available evidence.
+
+Query Analytics is requested with URL as the primary indicator. Dated rows are
+split between periods and filtered locally against normalized `urlScope` values.
+Impressions and clicks are summed, CTR is derived from those totals, and position
+is weighted by impressions. URL evidence is ranked by absolute impression delta
+and bounded by `resultLimit`.
+
+Search URL events are fetched once for the combined timeline and split into
+appeared, removed and net-change counts. The public event history is target-level,
+so scoped changes expose `INDEXING_EVENTS_ARE_TARGET_LEVEL`. Confidence also
+accounts for minimum impression volume, post-period readiness, the two-week Query
+Analytics window and source truncation. Results remain observational and always
+set `causalClaim=false`.

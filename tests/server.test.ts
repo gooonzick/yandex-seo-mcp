@@ -280,6 +280,7 @@ describe("Yandex SEO MCP server", () => {
     expect(names).toContain("seo_list_changes");
     expect(names).toContain("seo_compare_change_crawl");
     expect(names).toContain("seo_measure_change_metrica");
+    expect(names).toContain("seo_measure_change_webmaster");
     expect(names).toContain("crawler_reconcile_yandex_index");
     expect(names).toContain("crawler_analyze_internal_links");
     expect(names).toContain("query_intelligence_cluster_queries");

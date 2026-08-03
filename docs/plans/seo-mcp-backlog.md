@@ -224,12 +224,24 @@ post-period дают `insufficient_data`. Контракт всегда возв
 
 ### IMP-004 — Оценивать влияние по Вебмастеру
 
+- Статус: `completed` (2026-08-03)
 - Размер: `M`
 - Зависимости: IMP-001
+- Tool: `seo_measure_change_webmaster`
 - Критерии приемки:
   - сравниваются impressions, clicks, CTR, position и indexing events;
   - поддерживается URL scope изменения;
   - учитывается задержка появления данных.
+
+Реализация: `seo_measure_change_webmaster` сравнивает равные периоды до и после
+timestamp изменения с настраиваемым gap для задержки данных. Query Analytics
+запрашивается с `text_indicator=URL`; impressions, clicks, derived CTR и
+impression-weighted position агрегируются только для `urlScope` или всего target.
+Search URL events разделяются на те же периоды и возвращают appeared, removed и
+net change на уровне target (ограничение явно отмечается для scoped changes).
+Минимальный объем показов, двухнедельное окно query analytics, готовность
+post-period и source truncation входят в `confidence`/`limitations`; причинность
+не заявляется.
 
 ### IMP-005 — Объединить технические и поисковые сигналы
 
