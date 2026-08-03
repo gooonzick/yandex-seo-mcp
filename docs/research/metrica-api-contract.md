@@ -134,7 +134,11 @@
 - Базовые метрики: `ym:s:visits`, `ym:s:users`, `ym:s:bounceRate`, `ym:s:avgVisitDurationSeconds`, `ym:s:anyGoalConversionRate`.
 - Для конкретной цели последняя метрика заменяется на `ym:s:goal<goal_id>conversionRate`.
 
-Эти контракты используются инструментами `metrica_get_landing_pages`, `metrica_get_search_phrases` и `seo_detect_content_decay`.
+Эти контракты используются инструментами `metrica_get_landing_pages`,
+`metrica_get_search_phrases`, `seo_detect_content_decay` и
+`seo_measure_change_metrica`. Последний сравнивает периоды из целого числа недель
+и прозрачно выводит число converted visits из visits и conversion rate; это не
+заменяет raw goal reaches и не используется как доказательство причинности.
 
 ## Reports API: динамика
 

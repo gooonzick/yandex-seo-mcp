@@ -1,7 +1,7 @@
 # SEO change journal
 
-Status: journal and crawl correlation implemented by `IMP-001`/`IMP-002` on
-2026-08-03.
+Status: journal, crawl correlation and Metrica impact implemented by
+`IMP-001`–`IMP-003` on 2026-08-03.
 
 ## Storage contract
 
@@ -56,3 +56,24 @@ capture timestamps, relevance filters and the filtered crawl comparison. If a
 before or after crawl is unavailable, the tool succeeds with status
 `insufficient_data` and names `crawl_before_change` and/or
 `crawl_after_change` in `missing`.
+
+## Metrica impact
+
+`seo_measure_change_metrica` resolves the journal entry by `changeId` and builds
+equal periods immediately before and after its timestamp. The change date is
+excluded. `periodDays` is limited to 7–84 and must be divisible by seven, giving
+both periods the same weekday distribution. A validated UTC offset aligns the
+date boundary with the counter timezone.
+
+Both Reports API calls use `ym:s:startURL`, the organic source filter and
+visits/users plus any-goal or selected-goal conversion rate. Converted visits are
+derived as `visits × conversion rate`; this methodology is always disclosed.
+An explicit change scope is matched against normalized landing-page URLs, while
+an empty scope uses report totals for the target. Landing-page evidence is
+ordered by absolute visit delta and bounded by `resultLimit`.
+
+The result is `measured` only when both periods meet `minVisits` and the complete
+post-change interval is available. Otherwise it is `insufficient_data`, while
+still returning observed values. Confidence accounts for minimum volume,
+sampling, `data_lag` and source truncation. Limitations always state that the
+association is observational; `causalClaim` is fixed to `false`.

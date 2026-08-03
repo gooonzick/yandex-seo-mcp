@@ -293,7 +293,10 @@ in [`docs/architecture/crawl-snapshot-storage.md`](docs/architecture/crawl-snaps
 - `seo_compare_change_crawl` compares the nearest saved crawl strictly before
   and after a journal entry, scoped to relevant URLs, page fields and issue
   categories. Missing before/after data returns `insufficient_data` rather than
-  a tool error.
+  a tool error;
+- `seo_measure_change_metrica` compares equal 1–12-week organic periods around
+  a journal entry. It reports scoped visits, users, derived conversions and
+  bounded landing-page deltas with confidence and explicit data limitations.
 
 Each entry has a bounded description, external reference and up to 500
 same-origin scope URLs. An empty scope means the whole target. Repeating the same
@@ -301,6 +304,12 @@ target/reference/content is idempotent; conflicting reuse of a reference is
 rejected. The journal accepts no arbitrary payload and removes configured secret
 query parameters from stored URLs. See the
 [journal contract](docs/architecture/seo-change-journal.md).
+
+Metrica impact periods exclude the change date and contain whole weeks so both
+sides have the same weekday mix. Low traffic or an incomplete post-change period
+returns `insufficient_data`; sampling, data lag and landing-page source limits
+reduce confidence. The result is observational evidence only and always exposes
+`causalClaim: false`.
 The shared cursor contract is documented in
 [`docs/architecture/cursor-pagination.md`](docs/architecture/cursor-pagination.md).
 

@@ -202,13 +202,25 @@ Diff ограничивается `urlScope` (пустой scope означае�
 
 ### IMP-003 — Оценивать влияние по Метрике
 
+- Статус: `completed` (2026-08-03)
 - Размер: `L`
 - Зависимости: IMP-001
+- Tool: `seo_measure_change_metrica`
 - Критерии приемки:
   - сравниваются равные периоды до/после;
   - учитываются день недели и минимальный объем трафика;
   - доступны organic visits, users, conversions и landing pages;
   - результат не объявляет причинность и содержит confidence/limitations.
+
+Реализация: `seo_measure_change_metrica` строит вокруг timestamp изменения два
+равных периода длительностью 1–12 полных недель, исключая день изменения и
+сохраняя одинаковое представительство дней недели. Reports API запрашивается с
+organic-фильтром и landing-page dimension; результат содержит visits, users,
+derived conversions/conversion rate и bounded URL deltas с учетом `urlScope`.
+Минимальный объем, sampling, data lag, незавершенный post-period и top-N
+truncation отражаются в `confidence`/`limitations`; низкий объем или неполный
+post-period дают `insufficient_data`. Контракт всегда возвращает
+`causalClaim=false`.
 
 ### IMP-004 — Оценивать влияние по Вебмастеру
 

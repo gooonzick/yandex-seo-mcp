@@ -2,12 +2,14 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AppConfig } from "../config.js";
 import type { CrawlSnapshotStore } from "../crawler/snapshot-store.js";
+import type { MetricaClient } from "../metrica/client.js";
 import { YandexApiError } from "../shared/errors.js";
 import { createPaginationInputSchema } from "../shared/pagination.js";
 import { handleTool } from "../shared/result.js";
 import { telemetry } from "../shared/telemetry.js";
 import { seoChangeTypeSchema } from "../storage/schema.js";
 import type { SeoChangeStore } from "./change-store.js";
+import { isTimezoneOffset, measureMetricaImpact } from "./metrica-impact.js";
 
 const recordChangeSchema = z.object({
   target: z.url(),
@@ -31,10 +33,34 @@ const compareChangeCrawlSchema = z.object({
   exampleLimit: z.number().int().min(1).max(100).default(20),
 });
 
+const measureChangeMetricaSchema = z.object({
+  changeId: z.uuid(),
+  counterId: z.number().int().positive(),
+  periodDays: z
+    .number()
+    .int()
+    .min(7)
+    .max(84)
+    .refine((value) => value % 7 === 0, {
+      message: "periodDays must be a whole number of weeks",
+    })
+    .default(28),
+  minVisits: z.number().int().nonnegative().default(100),
+  sourceLimit: z.number().int().min(1).max(10_000).default(1_000),
+  resultLimit: z.number().int().min(1).max(100).default(25),
+  timezone: z
+    .string()
+    .refine(isTimezoneOffset, { message: "Expected timezone offset ±HH:MM" })
+    .default("+00:00"),
+  goalId: z.number().int().positive().optional(),
+  accuracy: z.union([z.literal("full"), z.number().min(0).max(1)]).optional(),
+});
+
 export function registerSeoImpactTools(
   server: McpServer,
   store: SeoChangeStore,
   crawlSnapshots: CrawlSnapshotStore,
+  metrica: MetricaClient,
   config: AppConfig,
 ): void {
   const limits = { maxRows: config.maxResultRows, maxBytes: config.maxResultBytes };
@@ -93,6 +119,28 @@ export function registerSeoImpactTools(
           result.status === "compared"
             ? "seo_change_crawl_compared"
             : "seo_change_crawl_insufficient_data",
+        );
+        return result;
+      }, limits),
+  );
+  server.registerTool(
+    "seo_measure_change_metrica",
+    {
+      title: "Measure an SEO change in Metrica",
+      description:
+        "Compare equal whole-week organic periods around a journaled change and report observational traffic, conversion and landing-page evidence without claiming causality.",
+      inputSchema: measureChangeMetricaSchema,
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    },
+    (input) =>
+      handleTool(async () => {
+        const change = await store.get(input.changeId);
+        if (!change) throw new YandexApiError("NOT_FOUND", "SEO change was not found");
+        const result = await measureMetricaImpact(metrica, change, input);
+        telemetry.event(
+          result.status === "measured"
+            ? "seo_change_metrica_measured"
+            : "seo_change_metrica_insufficient_data",
         );
         return result;
       }, limits),

@@ -279,6 +279,7 @@ describe("Yandex SEO MCP server", () => {
     expect(names).toContain("seo_record_change");
     expect(names).toContain("seo_list_changes");
     expect(names).toContain("seo_compare_change_crawl");
+    expect(names).toContain("seo_measure_change_metrica");
     expect(names).toContain("crawler_reconcile_yandex_index");
     expect(names).toContain("crawler_analyze_internal_links");
     expect(names).toContain("query_intelligence_cluster_queries");
@@ -501,6 +502,15 @@ describe("Yandex SEO MCP server", () => {
     expect(crawlImpact.structuredContent).toMatchObject({
       status: "insufficient_data",
       missing: ["crawl_before_change", "crawl_after_change"],
+    });
+    const metricaImpact = await client.callTool({
+      name: "seo_measure_change_metrica",
+      arguments: { changeId, counterId: 123, periodDays: 7, minVisits: 10 },
+    });
+    expect(metricaImpact.isError).not.toBe(true);
+    expect(metricaImpact.structuredContent).toMatchObject({
+      status: "insufficient_data",
+      quality: { confidence: "low", causalClaim: false },
     });
 
     const listed = await client.callTool({

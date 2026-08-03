@@ -42,6 +42,9 @@
 - Crawl impact correlation via `seo_compare_change_crawl`: nearest saved crawl
   before/after the journal timestamp, URL/type-aware diff filtering and explicit
   `insufficient_data` results when either side is unavailable.
+- Observational Metrica impact via `seo_measure_change_metrica`: equal whole-week
+  organic periods around a journal entry, scoped visits/users/conversions and
+  landing-page deltas, minimum-volume gates plus sampling/data-lag limitations.
 - MCP resources и prompts для типовых SEO workflow.
 - GET cache, bounded concurrency, HTTP rate limiting, telemetry и readiness endpoint.
 - Multi-user OAuth Authorization Code + PKCE, encrypted profile storage и изолированные bearer sessions.
