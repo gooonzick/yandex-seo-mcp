@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { migrateStorage } from "../src/storage/migrations.js";
 import { planCrawlHistoryCleanup, pruneCrawlHistory } from "../src/storage/retention.js";
 import { emptyStorage, normalizeCrawlUrl, storageSchema } from "../src/storage/schema.js";
+import { createActionFingerprint, type ActionScope } from "../src/actions/model.js";
 
 const run = (id: string, target: string, startedAt: string, status = "completed" as const) => ({
   id,
@@ -61,6 +62,48 @@ describe("crawl storage schema", () => {
     });
 
     expect(storageSchema.parse(data).crawl.issues[0]?.fingerprintVersion).toBe(1);
+  });
+
+  it("persists strict action items in the current schema", () => {
+    const data = emptyStorage();
+    const affectedScope: ActionScope = {
+      kind: "target",
+      target: "https://example.com/",
+      urls: [],
+      queries: [],
+    };
+    const evidence = {
+      sourceTool: "monitor_check_alerts",
+      sourceResult: { type: "monitoring_snapshot" as const, id: "snapshot-1" },
+      signal: "SEARCH_CTR_DROP",
+      observedAt: "2026-08-03T10:00:00.000Z",
+      summary: "Search CTR dropped materially.",
+    };
+    data.actions.push({
+      id: "55555555-5555-4555-8555-555555555555",
+      fingerprint: createActionFingerprint({
+        source: "monitoring",
+        category: "search_visibility",
+        affectedScope,
+        signal: evidence.signal,
+      }),
+      fingerprintVersion: 1,
+      source: "monitoring",
+      category: "search_visibility",
+      affectedScope,
+      severity: "warning",
+      impact: "medium",
+      confidence: "high",
+      effort: "medium",
+      status: "open",
+      title: "Investigate CTR regression",
+      description: "Review snippets and affected queries.",
+      evidence: [evidence],
+      createdAt: "2026-08-03T10:00:00.000Z",
+      updatedAt: "2026-08-03T10:00:00.000Z",
+    });
+
+    expect(storageSchema.parse(data).actions).toHaveLength(1);
   });
 
   it("applies age and per-target retention while preserving active runs", () => {

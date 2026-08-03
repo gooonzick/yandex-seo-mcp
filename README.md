@@ -21,6 +21,8 @@ recrawling, and the Metrica Logs API.
   background monitoring.
 - Persistent SEO change journal with typed entries and external-reference
   idempotency.
+- Versioned unified SEO action-item model with deterministic fingerprints,
+  traceable evidence and an explicit five-state lifecycle.
 - MCP resources for counters, sites, monitoring and telemetry, plus reusable
   report, incident-analysis and backlog prompts.
 - `stdio` transport for local MCP clients.
@@ -329,6 +331,21 @@ component data and recalculates the outcome. The classification uses material
 technical lifecycle changes and 5% search/traffic deltas; it remains
 observational and always returns `causalClaim: false`. See the
 [impact contract](docs/architecture/seo-change-impact.md).
+
+### Unified action item model
+
+Storage schema `v4` includes strict `actions[]` records for the Action Center.
+Each item separates severity, impact, confidence and effort; its affected scope
+is a canonical target, sorted same-origin URLs, sorted queries or a mixed scope.
+Lifecycle states are `open`, `acknowledged`, `in_progress`, `resolved` and
+`ignored`.
+
+Every evidence entry links to a source MCP tool and a typed source-result ID,
+plus a signal code, observation timestamp and bounded summary. Arbitrary payloads
+are rejected. Identity is the deterministic `act:v1:<sha256>` of source,
+category, scope and primary signal. See the
+[action model contract](docs/architecture/action-item-model.md).
+
 The shared cursor contract is documented in
 [`docs/architecture/cursor-pagination.md`](docs/architecture/cursor-pagination.md).
 

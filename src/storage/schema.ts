@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { actionItemSchema, type ActionItem } from "../actions/model.js";
 
-export const CURRENT_STORAGE_VERSION = 3 as const;
+export const CURRENT_STORAGE_VERSION = 4 as const;
 export const CRAWL_FINGERPRINT_VERSION = 2 as const;
 
 const isoTimestamp = z.string().datetime({ offset: true });
@@ -144,6 +145,7 @@ export const storageSchema = z
     version: z.literal(CURRENT_STORAGE_VERSION),
     monitoringSnapshots: z.array(monitoringSnapshotSchema),
     seoChanges: z.array(seoChangeSchema),
+    actions: z.array(actionItemSchema),
     crawl: z
       .object({
         runs: z.array(crawlRunSchema),
@@ -157,6 +159,7 @@ export const storageSchema = z
   .strict();
 
 export type StorageData = z.infer<typeof storageSchema>;
+export type { ActionItem };
 export type SeoChange = z.infer<typeof seoChangeSchema>;
 export type SeoChangeType = z.infer<typeof seoChangeTypeSchema>;
 export type CrawlRun = z.infer<typeof crawlRunSchema>;
@@ -170,6 +173,7 @@ export function emptyStorage(): StorageData {
     version: CURRENT_STORAGE_VERSION,
     monitoringSnapshots: [],
     seoChanges: [],
+    actions: [],
     crawl: { runs: [], pages: [], issues: [], links: [], aggregates: [] },
   };
 }

@@ -11,7 +11,8 @@ the primary file. The backup is a rolling single previous generation; the first
 write to a new path has no backup.
 
 When a legacy v1 file is first changed, `.bak` preserves its original bytes and
-the primary becomes validated v2. Subsequent successful writes replace `.bak`
+the primary becomes the validated current schema after all sequential migrations.
+Subsequent successful writes replace `.bak`
 with the immediately previous valid primary. Monitoring and crawl writers share
 the same path-level lock, so their backups cannot race inside one process.
 

@@ -268,12 +268,22 @@ change, paired crawl diff, indexing events, search visibility и organic traffic
 
 ### ACT-001 — Определить единую модель action item
 
+- Статус: `completed` (2026-08-03)
 - Размер: `M`
 - Зависимости: нет
 - Критерии приемки:
   - поля: source, category, affected scope, severity, impact, confidence, effort, evidence и fingerprint;
   - lifecycle: open, acknowledged, in_progress, resolved, ignored;
   - source evidence остается трассируемым до исходного tool/result.
+
+Реализация: storage schema `v4` добавляет strict bounded `actions[]` и
+последовательную миграцию `v3 → v4`. Единая модель содержит source, category,
+канонический same-origin affected scope, severity, impact, confidence, effort,
+status и evidence. Lifecycle ограничен `open`, `acknowledged`, `in_progress`,
+`resolved`, `ignored`. Каждая evidence-запись обязательно указывает source tool,
+тип/ID исходного result, signal, timestamp и summary без arbitrary payload.
+Fingerprint `act:v1:<sha256>` детерминирован по source/category/scope/primary
+signal и проверяется схемой при чтении.
 
 ### ACT-002 — Нормализовать сигналы существующих подсистем
 

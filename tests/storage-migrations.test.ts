@@ -18,15 +18,18 @@ describe("storage backup and migrations", () => {
   it("migrates v1/v2 fixtures forward and accepts the current fixture", async () => {
     const legacy = JSON.parse(await fixture("storage-v1.json")) as unknown;
     const version2 = JSON.parse(await fixture("storage-v2.json")) as unknown;
-    const current = JSON.parse(await fixture("storage-v3.json")) as unknown;
+    const version3 = JSON.parse(await fixture("storage-v3.json")) as unknown;
+    const current = JSON.parse(await fixture("storage-v4.json")) as unknown;
 
     expect(migrateStorage(legacy)).toMatchObject({
-      version: 3,
+      version: 4,
       monitoringSnapshots: [{ id: "legacy-fixture" }],
       seoChanges: [],
+      actions: [],
       crawl: { runs: [] },
     });
-    expect(migrateStorage(version2)).toMatchObject({ version: 3, seoChanges: [] });
+    expect(migrateStorage(version2)).toMatchObject({ version: 4, seoChanges: [], actions: [] });
+    expect(migrateStorage(version3)).toMatchObject({ version: 4, actions: [] });
     expect(migrateStorage(current)).toEqual(current);
   });
 
@@ -45,16 +48,20 @@ describe("storage backup and migrations", () => {
       sitemaps: {},
     });
 
-    expect(JSON.parse(await readFile(filePath, "utf8"))).toMatchObject({ version: 3 });
+    expect(JSON.parse(await readFile(filePath, "utf8"))).toMatchObject({
+      version: 4,
+      actions: [],
+    });
     expect(await readFile(`${filePath}.bak`, "utf8")).toBe(legacyFixture);
     expect((await stat(`${filePath}.bak`)).mode & 0o777).toBe(0o600);
 
     await copyFile(`${filePath}.bak`, filePath);
     const rolledBack = await new StorageFile(filePath).read();
     expect(rolledBack).toMatchObject({
-      version: 3,
+      version: 4,
       monitoringSnapshots: [{ id: "legacy-fixture" }],
       seoChanges: [],
+      actions: [],
     });
   });
 

@@ -15,8 +15,9 @@
 - Пакетный SEO-аудит с health score и приоритетными рекомендациями.
 - Сегментные и атрибуционные пресеты Метрики, включая ecommerce и comparison report.
 - Persistent monitoring snapshots, regression alerts, retention и interval scheduler.
-- Общая storage schema `v3`: monitoring snapshots, crawl runs/pages/issues/link
-  edges/aggregates и SEO change journal; последовательные миграции `v1 → v2 → v3`.
+- Общая storage schema `v4`: monitoring snapshots, crawl runs/pages/issues/link
+  edges/aggregates, SEO change journal и unified action items; последовательные
+  миграции `v1 → v2 → v3 → v4`.
 - Идемпотентная запись crawl snapshots через `crawler_save_snapshot`: atomic write,
   partial-run markers, query denylist, dry-run/confirmation и storage telemetry.
 - Стабильный crawl issue fingerprint `v2` для redirect, canonical, metadata,
@@ -51,6 +52,9 @@
 - Unified stateless impact via `seo_measure_change_impact`: one change → crawl →
   indexing → search → traffic timeline, deterministic five-state outcome,
   source-tagged evidence, alternatives and complete bounded component results.
+- Strict unified action-item model with canonical affected scope, five-state
+  lifecycle, separate severity/impact/confidence/effort, traceable bounded source
+  evidence and deterministic `act:v1` fingerprints.
 - MCP resources и prompts для типовых SEO workflow.
 - GET cache, bounded concurrency, HTTP rate limiting, telemetry и readiness endpoint.
 - Multi-user OAuth Authorization Code + PKCE, encrypted profile storage и изолированные bearer sessions.

@@ -25,7 +25,7 @@ describe("MonitoringStore", () => {
       organic: { visits: 100 },
     });
     expect(JSON.parse(await readFile(filePath, "utf8"))).toMatchObject({
-      version: 3,
+      version: 4,
       monitoringSnapshots: [{ id: snapshot.id }],
       seoChanges: [],
       crawl: { runs: [] },
@@ -67,7 +67,7 @@ describe("MonitoringStore", () => {
       version: number;
       monitoringSnapshots: Array<{ id: string }>;
     };
-    expect(migrated.version).toBe(3);
+    expect(migrated.version).toBe(4);
     expect(migrated.monitoringSnapshots.map(({ id }) => id)).toContain("legacy-snapshot");
   });
 

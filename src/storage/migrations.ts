@@ -7,6 +7,7 @@ import {
   crawlPageSchema,
   crawlRunSchema,
   monitoringSnapshotSchema,
+  seoChangeSchema,
   storageSchema,
   type StorageData,
 } from "./schema.js";
@@ -34,6 +35,15 @@ const storageV2Schema = z
   })
   .strict();
 
+const storageV3Schema = z
+  .object({
+    version: z.literal(3),
+    monitoringSnapshots: z.array(monitoringSnapshotSchema),
+    seoChanges: z.array(seoChangeSchema),
+    crawl: storageV2Schema.shape.crawl,
+  })
+  .strict();
+
 type Migration = (input: unknown) => unknown;
 
 const migrations: ReadonlyMap<number, Migration> = new Map<number, Migration>([
@@ -52,7 +62,14 @@ const migrations: ReadonlyMap<number, Migration> = new Map<number, Migration>([
     2,
     (input) => {
       const legacy = storageV2Schema.parse(input);
-      return { ...legacy, version: CURRENT_STORAGE_VERSION, seoChanges: [] };
+      return { ...legacy, version: 3, seoChanges: [] };
+    },
+  ],
+  [
+    3,
+    (input) => {
+      const legacy = storageV3Schema.parse(input);
+      return { ...legacy, version: CURRENT_STORAGE_VERSION, actions: [] };
     },
   ],
 ]);
