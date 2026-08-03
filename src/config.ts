@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  CRAWL_REGRESSION_TYPES,
+  type CrawlRegressionExclusion,
+} from "./crawler/regression-detector.js";
 
 const positiveInteger = (fallback: number) => z.coerce.number().int().positive().default(fallback);
 
@@ -30,6 +34,7 @@ const environmentSchema = z.object({
     .default(
       "access_token,api_key,apikey,auth,authorization,code,credential,key,password,secret,session,sessionid,sid,token",
     ),
+  CRAWLER_REGRESSION_EXCLUSIONS_JSON: z.string().default("[]"),
   QUERY_CLUSTER_THRESHOLD: z.coerce.number().min(0.1).max(1).default(0.42),
   QUERY_MAX_QUERIES: z.coerce.number().int().min(10).max(2_000).default(500),
   YANDEX_OAUTH_CLIENT_ID: z.string().min(1).optional(),
@@ -67,6 +72,7 @@ export interface AppConfig {
   crawlerSnapshotRetentionDays?: number;
   crawlerSnapshotMaxRuns?: number;
   crawlerSnapshotQueryDenylist?: string[];
+  crawlerRegressionExclusions?: CrawlRegressionExclusion[];
   queryClusterThreshold?: number;
   queryMaxQueries?: number;
   oauthClientId?: string;
@@ -104,6 +110,15 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     hostId: target.hostId,
     ...(target.counterId ? { counterId: target.counterId } : {}),
   }));
+  const crawlerRegressionExclusions = z
+    .array(
+      z.object({
+        target: z.url(),
+        types: z.array(z.enum(CRAWL_REGRESSION_TYPES)).default([]),
+        urlPrefixes: z.array(z.url()).default([]),
+      }),
+    )
+    .parse(JSON.parse(parsed.CRAWLER_REGRESSION_EXCLUSIONS_JSON) as unknown);
 
   const config: AppConfig = {
     httpTimeoutMs: parsed.YANDEX_HTTP_TIMEOUT_MS,
@@ -128,6 +143,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     crawlerSnapshotQueryDenylist: parsed.CRAWLER_SNAPSHOT_QUERY_DENYLIST.split(",")
       .map((key) => key.trim().toLowerCase())
       .filter(Boolean),
+    crawlerRegressionExclusions,
     queryClusterThreshold: parsed.QUERY_CLUSTER_THRESHOLD,
     queryMaxQueries: parsed.QUERY_MAX_QUERIES,
     transport: parsed.MCP_TRANSPORT,

@@ -273,6 +273,7 @@ describe("Yandex SEO MCP server", () => {
     expect(names).toContain("crawler_list_snapshots");
     expect(names).toContain("crawler_get_snapshot");
     expect(names).toContain("crawler_compare_snapshots");
+    expect(names).toContain("crawler_detect_regressions");
     expect(names).toContain("crawler_reconcile_yandex_index");
     expect(names).toContain("crawler_analyze_internal_links");
     expect(names).toContain("query_intelligence_cluster_queries");
@@ -351,6 +352,27 @@ describe("Yandex SEO MCP server", () => {
     });
     expect(missing.isError).toBe(true);
     expect(missing.structuredContent).toMatchObject({ code: "NOT_FOUND" });
+
+    const secondAudit = await client.callTool({
+      name: "crawler_audit_site",
+      arguments: { startUrl: "https://example.com/", maxPages: 10 },
+    });
+    const secondRunId = (secondAudit.structuredContent as { runId?: string } | undefined)?.runId;
+    await client.callTool({
+      name: "crawler_save_snapshot",
+      arguments: { runId: secondRunId, dryRun: false, confirm: true },
+    });
+    const regressions = await client.callTool({
+      name: "crawler_detect_regressions",
+      arguments: { beforeRunId: runId, afterRunId: secondRunId, sampleLimit: 10 },
+    });
+    expect(regressions.isError).not.toBe(true);
+    expect(regressions.structuredContent).toMatchObject({
+      beforeRunId: runId,
+      afterRunId: secondRunId,
+      summary: { incidentCount: 0, affectedUrlCount: 0 },
+      incidents: [],
+    });
   });
 
   it("paginates monitoring snapshots with an opaque cursor", async () => {

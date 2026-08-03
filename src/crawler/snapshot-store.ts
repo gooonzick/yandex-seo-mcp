@@ -20,6 +20,11 @@ import {
 import type { CrawledPage, CrawlResult } from "./types.js";
 import { createCrawlIssueFingerprint } from "./issue-fingerprint.js";
 import { compareCrawlSnapshots, type CrawlSnapshotComparison } from "./snapshot-compare.js";
+import {
+  detectCrawlRegressions,
+  type CrawlRegressionExclusion,
+  type CrawlRegressionReport,
+} from "./regression-detector.js";
 
 export const DEFAULT_QUERY_PARAMETER_DENYLIST = [
   "access_token",
@@ -365,6 +370,24 @@ export class CrawlSnapshotStore {
     if (beforeRun.target !== afterRun.target)
       throw new YandexApiError("VALIDATION", "Crawl snapshots must have the same target");
     return compareCrawlSnapshots(data, beforeRun, afterRun, exampleLimit);
+  }
+
+  public async detectRegressions(
+    beforeRunId: string,
+    afterRunId: string,
+    sampleLimit: number,
+    exclusions: readonly CrawlRegressionExclusion[] = [],
+  ): Promise<CrawlRegressionReport> {
+    if (beforeRunId === afterRunId)
+      throw new YandexApiError("VALIDATION", "beforeRunId and afterRunId must be different");
+    const data = pruneCrawlHistory(await this.storage.read(), this.retention);
+    const beforeRun = data.crawl.runs.find(({ id }) => id === beforeRunId);
+    const afterRun = data.crawl.runs.find(({ id }) => id === afterRunId);
+    if (!beforeRun || !afterRun)
+      throw new YandexApiError("NOT_FOUND", "One or both crawl snapshots were not found");
+    if (beforeRun.target !== afterRun.target)
+      throw new YandexApiError("VALIDATION", "Crawl snapshots must have the same target");
+    return detectCrawlRegressions(data, beforeRun, afterRun, sampleLimit, exclusions);
   }
 
   private summary(data: StorageData, run: CrawlRun): CrawlSnapshotSummary {

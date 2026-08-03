@@ -62,6 +62,12 @@ const crawlSnapshotCompareSchema = z.object({
   exampleLimit: z.number().int().min(1).max(200).default(50),
 });
 
+const crawlRegressionSchema = z.object({
+  beforeRunId: z.uuid(),
+  afterRunId: z.uuid(),
+  sampleLimit: z.number().int().min(1).max(200).default(50),
+});
+
 function extractUrls(value: unknown): string[] {
   const urls = new Set<string>();
   const visit = (item: unknown, key = "") => {
@@ -278,6 +284,28 @@ export function registerCrawlerTools(
         );
         telemetry.event("crawler_snapshot_compare");
         return comparison;
+      }, resultLimits),
+  );
+
+  server.registerTool(
+    "crawler_detect_regressions",
+    {
+      title: "Detect technical crawl regressions",
+      description:
+        "Aggregate deterministic technical regression incidents between two snapshots, applying configured target-level false-positive exclusions.",
+      inputSchema: crawlRegressionSchema,
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    (input) =>
+      handleTool(async () => {
+        const report = await snapshotStore.detectRegressions(
+          input.beforeRunId,
+          input.afterRunId,
+          input.sampleLimit,
+          config.crawlerRegressionExclusions,
+        );
+        telemetry.event("crawler_regressions_detected");
+        return report;
       }, resultLimits),
   );
 

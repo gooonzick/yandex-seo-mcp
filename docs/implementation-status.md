@@ -30,6 +30,9 @@
 - Deterministic crawl snapshot comparison via `crawler_compare_snapshots`: page
   health/field diff, stable-fingerprint issue lifecycle, isolated crawl parameter
   changes and bounded examples.
+- Grouped technical regression detection via `crawler_detect_regressions` for
+  HTTP errors, noindex, canonical drift, redirect chains, orphan pages and lost
+  internal links, with deterministic scoring and target-level exclusions.
 - MCP resources и prompts для типовых SEO workflow.
 - GET cache, bounded concurrency, HTTP rate limiting, telemetry и readiness endpoint.
 - Multi-user OAuth Authorization Code + PKCE, encrypted profile storage и изолированные bearer sessions.

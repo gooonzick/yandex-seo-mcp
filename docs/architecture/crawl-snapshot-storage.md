@@ -101,6 +101,30 @@ Summary counts cover every page and issue; only deterministic, change-first
 examples are returned, bounded by `exampleLimit` (default 50, maximum 200 per
 collection).
 
+## Regression detection
+
+`crawler_detect_regressions` converts two same-target snapshots into grouped
+technical incidents. It detects newly entered 4xx/5xx states, new stable
+`NOINDEX`, `REDIRECT_CHAIN` and `ORPHAN_PAGE` issues, canonical changes whose new
+value is not self-referential, and retained URLs that lost incoming internal-link
+edges. All affected URLs of one regression type form one incident rather than
+one response item per URL.
+
+Severity and confidence are deterministic. New 5xx incidents are critical;
+new 4xx, noindex and canonical drift are high; redirect chains, orphan pages and
+link loss are medium. A mass change (at least five URLs and at least 20% of the
+current snapshot) raises severity by one level. Confidence starts from a
+type-specific constant and is reduced for partial snapshots or changed crawl
+parameters. The report exposes those conditions and the computed mass threshold.
+
+False-positive policies are loaded from `CRAWLER_REGRESSION_EXCLUSIONS_JSON`.
+Each policy has a normalized `target`, optional `types`, and optional
+`urlPrefixes`. Empty types match every regression type; empty prefixes match the
+whole target. Exclusions are applied before grouping, counted in the report and
+never mutate stored snapshots. Returned `sampleUrls` are sorted and bounded by
+`sampleLimit` (default 50, maximum 200), while affected counts cover the full
+incident.
+
 ## Issue identity
 
 New issues use fingerprint algorithm `v2`. Its SHA-256 input contains the

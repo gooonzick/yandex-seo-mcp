@@ -17,8 +17,24 @@ describe("loadConfig", () => {
     expect(config.crawlerSnapshotRetentionDays).toBe(90);
     expect(config.crawlerSnapshotMaxRuns).toBe(100);
     expect(config.crawlerSnapshotQueryDenylist).toContain("access_token");
+    expect(config.crawlerRegressionExclusions).toEqual([]);
     expect(config.queryClusterThreshold).toBe(0.42);
     expect(config.queryMaxQueries).toBe(500);
+  });
+
+  it("parses target-level crawl regression exclusions", () => {
+    const config = loadConfig({
+      CRAWLER_REGRESSION_EXCLUSIONS_JSON:
+        '[{"target":"https://example.com/","types":["NEW_NOINDEX"],"urlPrefixes":["https://example.com/private/"]}]',
+    });
+
+    expect(config.crawlerRegressionExclusions).toEqual([
+      {
+        target: "https://example.com/",
+        types: ["NEW_NOINDEX"],
+        urlPrefixes: ["https://example.com/private/"],
+      },
+    ]);
   });
 
   it("prefers service-specific tokens and parses limits", () => {

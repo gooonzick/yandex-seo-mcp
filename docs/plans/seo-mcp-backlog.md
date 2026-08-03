@@ -126,6 +126,7 @@ examples ограничиваются параметром `exampleLimit`.
 
 ### CRWL-006 — Выявлять технические регрессии
 
+- Статус: `completed` (2026-08-03)
 - Размер: `M`
 - Зависимости: CRWL-005
 - Tool: `crawler_detect_regressions`
@@ -134,6 +135,13 @@ examples ограничиваются параметром `exampleLimit`.
   - поддерживаются новые 4xx/5xx, noindex, canonical drift, redirect chains, orphan pages и потеря внутренних ссылок;
   - массовое изменение распознается как один incident с affected URL count;
   - false-positive exclusions настраиваются для target.
+
+Реализация: `crawler_detect_regressions` агрегирует новые 4xx/5xx, noindex,
+canonical drift, redirect chains, orphan pages и потерю входящих внутренних
+ссылок в один incident на тип. Severity, confidence и mass-change threshold
+детерминированы; summary считается по всем findings, URL samples ограничены.
+Target-level exclusions задаются через `CRAWLER_REGRESSION_EXCLUSIONS_JSON` по
+типам регрессий и URL prefixes.
 
 ### CRWL-007 — Добавить retention и очистку истории
 
