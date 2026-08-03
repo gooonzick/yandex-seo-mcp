@@ -48,6 +48,9 @@
 - Observational Webmaster impact via `seo_measure_change_webmaster`: URL-scoped
   impressions/clicks/CTR/position, target-level search indexing events and an
   explicit data-delay/readiness model with confidence limitations.
+- Unified stateless impact via `seo_measure_change_impact`: one change → crawl →
+  indexing → search → traffic timeline, deterministic five-state outcome,
+  source-tagged evidence, alternatives and complete bounded component results.
 - MCP resources и prompts для типовых SEO workflow.
 - GET cache, bounded concurrency, HTTP rate limiting, telemetry и readiness endpoint.
 - Multi-user OAuth Authorization Code + PKCE, encrypted profile storage и изолированные bearer sessions.

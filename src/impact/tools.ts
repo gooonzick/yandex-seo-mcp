@@ -10,6 +10,7 @@ import { handleTool } from "../shared/result.js";
 import { telemetry } from "../shared/telemetry.js";
 import { seoChangeTypeSchema } from "../storage/schema.js";
 import type { SeoChangeStore } from "./change-store.js";
+import { combineChangeImpact } from "./change-impact.js";
 import { isTimezoneOffset, measureMetricaImpact } from "./metrica-impact.js";
 import { measureWebmasterImpact } from "./webmaster-impact.js";
 
@@ -66,6 +67,48 @@ const measureChangeWebmasterSchema = z.object({
   minImpressions: z.number().int().nonnegative().default(100),
   sourceLimit: z.number().int().min(1).max(500).default(500),
   resultLimit: z.number().int().min(1).max(100).default(25),
+  deviceType: z.enum(["ALL", "DESKTOP", "MOBILE_AND_TABLET", "MOBILE", "TABLET"]).default("ALL"),
+  searchLocation: z
+    .enum([
+      "ALL_LOCATIONS",
+      "ALL_LOCATIONS_ORGANIC",
+      "WEB_LOCATION",
+      "DYNAMIC_LOCATION_ALL",
+      "DYNAMIC_LOCATION_BASIC",
+      "DYNAMIC_LOCATION_ADDITIONAL",
+    ])
+    .default("WEB_LOCATION"),
+  regionIds: z.array(z.number().int().positive()).max(100).optional(),
+});
+
+const measureChangeImpactSchema = z.object({
+  changeId: z.uuid(),
+  counterId: z.number().int().positive(),
+  hostId: z.string().min(1).max(2_000),
+  crawlExampleLimit: z.number().int().min(1).max(100).default(20),
+  metricaPeriodDays: z
+    .number()
+    .int()
+    .min(7)
+    .max(84)
+    .refine((value) => value % 7 === 0, {
+      message: "metricaPeriodDays must be a whole number of weeks",
+    })
+    .default(28),
+  metricaMinVisits: z.number().int().nonnegative().default(100),
+  metricaSourceLimit: z.number().int().min(1).max(10_000).default(1_000),
+  metricaResultLimit: z.number().int().min(1).max(100).default(25),
+  metricaTimezone: z
+    .string()
+    .refine(isTimezoneOffset, { message: "Expected timezone offset ±HH:MM" })
+    .default("+00:00"),
+  goalId: z.number().int().positive().optional(),
+  accuracy: z.union([z.literal("full"), z.number().min(0).max(1)]).optional(),
+  webmasterPeriodDays: z.number().int().min(1).max(7).default(3),
+  webmasterDataDelayDays: z.number().int().min(0).max(14).default(2),
+  webmasterMinImpressions: z.number().int().nonnegative().default(100),
+  webmasterSourceLimit: z.number().int().min(1).max(500).default(500),
+  webmasterResultLimit: z.number().int().min(1).max(100).default(25),
   deviceType: z.enum(["ALL", "DESKTOP", "MOBILE_AND_TABLET", "MOBILE", "TABLET"]).default("ALL"),
   searchLocation: z
     .enum([
@@ -189,6 +232,48 @@ export function registerSeoImpactTools(
             ? "seo_change_webmaster_measured"
             : "seo_change_webmaster_insufficient_data",
         );
+        return result;
+      }, limits),
+  );
+  server.registerTool(
+    "seo_measure_change_impact",
+    {
+      title: "Measure unified SEO change impact",
+      description:
+        "Recalculate a unified change timeline from crawl, Metrica and Webmaster evidence, with deterministic outcome, confidence and alternative explanations.",
+      inputSchema: measureChangeImpactSchema,
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    },
+    (input) =>
+      handleTool(async () => {
+        const change = await store.get(input.changeId);
+        if (!change) throw new YandexApiError("NOT_FOUND", "SEO change was not found");
+        const [crawl, metricaImpact, webmasterImpact] = await Promise.all([
+          crawlSnapshots.compareForChange(change, input.crawlExampleLimit),
+          measureMetricaImpact(metrica, change, {
+            counterId: input.counterId,
+            periodDays: input.metricaPeriodDays,
+            minVisits: input.metricaMinVisits,
+            sourceLimit: input.metricaSourceLimit,
+            resultLimit: input.metricaResultLimit,
+            timezone: input.metricaTimezone,
+            goalId: input.goalId,
+            accuracy: input.accuracy,
+          }),
+          measureWebmasterImpact(webmaster, change, {
+            hostId: input.hostId,
+            periodDays: input.webmasterPeriodDays,
+            dataDelayDays: input.webmasterDataDelayDays,
+            minImpressions: input.webmasterMinImpressions,
+            sourceLimit: input.webmasterSourceLimit,
+            resultLimit: input.webmasterResultLimit,
+            deviceType: input.deviceType,
+            searchLocation: input.searchLocation,
+            regionIds: input.regionIds,
+          }),
+        ]);
+        const result = combineChangeImpact(change, crawl, metricaImpact, webmasterImpact);
+        telemetry.event(`seo_change_impact_${result.status}`);
         return result;
       }, limits),
   );

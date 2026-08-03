@@ -116,6 +116,14 @@ describe("Yandex SEO MCP server", () => {
           { status: 200 },
         );
       }
+      if (url.pathname.endsWith("/search-urls/events/history")) {
+        return new Response(
+          JSON.stringify({
+            indicators: { APPEARED_IN_SEARCH: [], REMOVED_FROM_SEARCH: [] },
+          }),
+          { status: 200 },
+        );
+      }
       if (url.pathname === "/robots.txt") {
         return new Response("User-agent: *\nSitemap: https://example.com/sitemap.xml", {
           status: 200,
@@ -281,6 +289,7 @@ describe("Yandex SEO MCP server", () => {
     expect(names).toContain("seo_compare_change_crawl");
     expect(names).toContain("seo_measure_change_metrica");
     expect(names).toContain("seo_measure_change_webmaster");
+    expect(names).toContain("seo_measure_change_impact");
     expect(names).toContain("crawler_reconcile_yandex_index");
     expect(names).toContain("crawler_analyze_internal_links");
     expect(names).toContain("query_intelligence_cluster_queries");
@@ -512,6 +521,26 @@ describe("Yandex SEO MCP server", () => {
     expect(metricaImpact.structuredContent).toMatchObject({
       status: "insufficient_data",
       quality: { confidence: "low", causalClaim: false },
+    });
+    const unifiedImpact = await client.callTool({
+      name: "seo_measure_change_impact",
+      arguments: {
+        changeId,
+        counterId: 123,
+        hostId: "https:example.com:443",
+        metricaPeriodDays: 7,
+        metricaMinVisits: 0,
+        webmasterPeriodDays: 1,
+        webmasterDataDelayDays: 0,
+        webmasterMinImpressions: 0,
+      },
+    });
+    expect(unifiedImpact.isError).not.toBe(true);
+    expect(unifiedImpact.structuredContent).toMatchObject({
+      status: "insufficient_data",
+      confidence: "low",
+      causalClaim: false,
+      calculation: { stateless: true, recalculatesOnEveryCall: true },
     });
 
     const listed = await client.callTool({

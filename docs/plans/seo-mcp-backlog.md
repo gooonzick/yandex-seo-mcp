@@ -245,6 +245,7 @@ post-period и source truncation входят в `confidence`/`limitations`; п�
 
 ### IMP-005 — Объединить технические и поисковые сигналы
 
+- Статус: `completed` (2026-08-03)
 - Размер: `L`
 - Зависимости: IMP-002, IMP-003, IMP-004
 - Tool: `seo_measure_change_impact`
@@ -253,6 +254,15 @@ post-period и source truncation входят в `confidence`/`limitations`; п�
   - итог: positive, negative, mixed, neutral или insufficient data;
   - приводятся наблюдаемые evidence и альтернативные объяснения;
   - можно повторно рассчитать результат с обновившимися данными.
+
+Реализация: `seo_measure_change_impact` при каждом вызове заново получает crawl,
+Metrica и Webmaster evidence для journaled change. Единая timeline содержит
+change, paired crawl diff, indexing events, search visibility и organic traffic.
+Материальные сигналы классифицируются детерминированно как `positive`,
+`negative`, `mixed` или `neutral`; покрытие менее двух независимых доменов дает
+`insufficient_data`. Ответ включает source-tagged evidence, общий confidence,
+ограничения, альтернативные объяснения и полные bounded component results.
+Расчет stateless, не кешируется и всегда возвращает `causalClaim=false`.
 
 ## 6. P0 — Unified Action Center
 

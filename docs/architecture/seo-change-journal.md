@@ -1,7 +1,7 @@
 # SEO change journal
 
-Status: journal, crawl correlation, Metrica impact and Webmaster impact
-implemented by `IMP-001`–`IMP-004` on 2026-08-03.
+Status: journal and complete unified impact pipeline implemented by
+`IMP-001`–`IMP-005` on 2026-08-03.
 
 ## Storage contract
 
@@ -98,3 +98,6 @@ so scoped changes expose `INDEXING_EVENTS_ARE_TARGET_LEVEL`. Confidence also
 accounts for minimum impression volume, post-period readiness, the two-week Query
 Analytics window and source truncation. Results remain observational and always
 set `causalClaim=false`.
+
+The combined timeline, classification and recalculation contract is documented
+in [`seo-change-impact.md`](seo-change-impact.md).
