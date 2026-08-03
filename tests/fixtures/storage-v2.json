@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "monitoringSnapshots": [],
+  "crawl": {
+    "runs": [],
+    "pages": [],
+    "issues": [],
+    "links": [],
+    "aggregates": []
+  }
+}

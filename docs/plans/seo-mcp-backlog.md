@@ -421,9 +421,15 @@ HTTP status и другие изменчивые details не входят в id
 
 ### ENG-005 — Backup и migration tests
 
+- Статус: `completed` (2026-08-03)
 - Приоритет: `P0`
 - Размер: `M`
 - Scope: forward migrations, rollback procedure, corrupted store behavior и fixtures.
+
+Реализация: последовательный migration registry, atomic rolling `.bak` перед
+overwrite, fail-closed `StorageCorruptionError`, v1/v2/corrupted fixtures и тест
+полного rollback-сценария. Процедура восстановления описана в
+[architecture/storage-backup-and-recovery.md](../architecture/storage-backup-and-recovery.md).
 
 ### ENG-006 — Observability для новых подсистем
 

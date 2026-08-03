@@ -240,6 +240,11 @@ response body or fetch-error text. URL credentials, fragments and keys from
 per-target count limits are controlled by `CRAWLER_SNAPSHOT_RETENTION_DAYS` and
 `CRAWLER_SNAPSHOT_MAX_RUNS`.
 
+Before overwriting an existing valid storage file, the server preserves its
+previous generation at `<MONITOR_STORAGE_PATH>.bak` with mode `0600`. Invalid or
+unsupported storage fails closed and is never overwritten automatically. See the
+[backup and recovery procedure](docs/architecture/storage-backup-and-recovery.md).
+
 Persisted issues use a versioned stable fingerprint based on normalized URL,
 category and issue code. Volatile evidence does not change identity; link issues
 also include the related URL so separate broken links are not deduplicated.

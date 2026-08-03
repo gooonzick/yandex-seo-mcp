@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "snapshots": [
+    {
+      "id": "legacy-fixture",
+      "target": "production",
+      "hostId": "https:example.com:443",
+      "capturedAt": "2026-08-03T10:00:00.000Z",
+      "summary": { "searchablePages": 42 },
+      "diagnostics": { "problems": [] },
+      "sitemaps": { "sitemaps": [] }
+    }
+  ]
+}

@@ -14,19 +14,40 @@ const legacyStorageSchema = z
   })
   .passthrough();
 
+type Migration = (input: unknown) => unknown;
+
+const migrations: ReadonlyMap<number, Migration> = new Map([
+  [
+    1,
+    (input) => {
+      const legacy = legacyStorageSchema.parse(input);
+      return {
+        ...emptyStorage(),
+        monitoringSnapshots: legacy.snapshots,
+      };
+    },
+  ],
+]);
+
 export function migrateStorage(input: unknown): StorageData {
   if (input === null || typeof input !== "object") {
     throw new Error("Storage data must be a JSON object");
   }
 
-  const version = Reflect.get(input, "version");
-  if (version === CURRENT_STORAGE_VERSION) return storageSchema.parse(input);
-  if (version === 1) {
-    const legacy = legacyStorageSchema.parse(input);
-    return {
-      ...emptyStorage(),
-      monitoringSnapshots: legacy.snapshots,
-    };
+  let current: unknown = input;
+  let version = Reflect.get(input, "version");
+  while (version !== CURRENT_STORAGE_VERSION) {
+    if (typeof version !== "number" || !Number.isInteger(version))
+      throw new Error(`Unsupported storage schema version: ${String(version)}`);
+    const migration = migrations.get(version);
+    if (!migration) throw new Error(`Unsupported storage schema version: ${String(version)}`);
+    current = migration(current);
+    if (!current || typeof current !== "object")
+      throw new Error(`Storage migration from version ${version} returned invalid data`);
+    const nextVersion = Reflect.get(current, "version");
+    if (typeof nextVersion !== "number" || nextVersion <= version)
+      throw new Error(`Storage migration from version ${version} did not advance the schema`);
+    version = nextVersion;
   }
-  throw new Error(`Unsupported storage schema version: ${String(version)}`);
+  return storageSchema.parse(current);
 }

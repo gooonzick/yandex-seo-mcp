@@ -1,10 +1,20 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { migrateStorage } from "./migrations.js";
 import { emptyStorage, storageSchema, type StorageData } from "./schema.js";
 
 const writesByPath = new Map<string, Promise<void>>();
+
+export class StorageCorruptionError extends Error {
+  public constructor(options: { cause: unknown }) {
+    super(
+      "Storage file is corrupted or uses an unsupported schema; restore its .bak file",
+      options,
+    );
+    this.name = "StorageCorruptionError";
+  }
+}
 
 export class StorageFile {
   private readonly filePath: string;
@@ -14,11 +24,17 @@ export class StorageFile {
   }
 
   public async read(): Promise<StorageData> {
+    let serialized: string;
     try {
-      return migrateStorage(JSON.parse(await readFile(this.filePath, "utf8")) as unknown);
+      serialized = await readFile(this.filePath, "utf8");
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return emptyStorage();
       throw error;
+    }
+    try {
+      return migrateStorage(JSON.parse(serialized) as unknown);
+    } catch (error) {
+      throw new StorageCorruptionError({ cause: error });
     }
   }
 
@@ -32,9 +48,32 @@ export class StorageFile {
         encoding: "utf8",
         mode: 0o600,
       });
-      await rename(temporary, this.filePath);
+      try {
+        await this.backupCurrent();
+        await rename(temporary, this.filePath);
+      } finally {
+        await unlink(temporary).catch((error: unknown) => {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        });
+      }
     });
     return structuredClone(updated);
+  }
+
+  private async backupCurrent(): Promise<void> {
+    const backupPath = `${this.filePath}.bak`;
+    const temporary = `${backupPath}.${process.pid}.${randomUUID()}.tmp`;
+    let copied = false;
+    try {
+      await copyFile(this.filePath, temporary);
+      copied = true;
+      await chmod(temporary, 0o600);
+      await rename(temporary, backupPath);
+    } catch (error) {
+      await unlink(temporary).catch(() => undefined);
+      if (!copied && (error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
   }
 
   private async serialized(operation: () => Promise<void>): Promise<void> {

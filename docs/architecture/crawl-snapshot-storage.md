@@ -27,6 +27,12 @@ migrated data atomically with file mode `0600`, preserving both monitoring and
 crawl collections. Future schema changes must add an explicit sequential
 migration and a fixture test.
 
+Before replacing an existing valid primary file, `StorageFile` atomically stores
+its previous generation at `<storage-path>.bak`. Corrupted or unsupported input
+fails closed and is never overwritten or promoted to a backup. Operational
+recovery is documented in
+[storage-backup-and-recovery.md](storage-backup-and-recovery.md).
+
 ## Crawl records
 
 - `run` owns a stable UUID, normalized target, start/finish timestamps, lifecycle
