@@ -111,6 +111,7 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
             maxBodyBytes: config.crawlerMaxBodyBytes ?? 2_000_000,
             snapshotRetentionDays: config.crawlerSnapshotRetentionDays ?? 90,
             snapshotMaxRunsPerTarget: config.crawlerSnapshotMaxRuns ?? 100,
+            historyCleanupEnabled: Boolean(config.crawlerHistoryWriteToolsEnabled),
           },
           queryIntelligence: {
             maxQueries: config.queryMaxQueries ?? 500,

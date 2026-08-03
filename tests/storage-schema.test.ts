@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { migrateStorage } from "../src/storage/migrations.js";
-import { pruneCrawlHistory } from "../src/storage/retention.js";
+import { planCrawlHistoryCleanup, pruneCrawlHistory } from "../src/storage/retention.js";
 import { emptyStorage, normalizeCrawlUrl, storageSchema } from "../src/storage/schema.js";
 
 const run = (id: string, target: string, startedAt: string, status = "completed" as const) => ({
@@ -98,5 +98,16 @@ describe("crawl storage schema", () => {
       "33333333-3333-4333-8333-333333333333",
       "44444444-4444-4444-8444-444444444444",
     ]);
+    const plan = planCrawlHistoryCleanup(
+      data,
+      { maxAgeDays: 30, maxRunsPerTarget: 1 },
+      new Date("2026-08-03T00:00:00.000Z"),
+    );
+    expect(plan.deleted).toMatchObject({ runs: 2 });
+    expect(plan.deletedRunIds).toEqual([
+      "11111111-1111-4111-8111-111111111111",
+      "22222222-2222-4222-8222-222222222222",
+    ]);
+    expect(plan.activeRunCount).toBe(1);
   });
 });

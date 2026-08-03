@@ -68,6 +68,13 @@ const crawlRegressionSchema = z.object({
   sampleLimit: z.number().int().min(1).max(200).default(50),
 });
 
+const crawlCleanupSchema = z.object({
+  maxAgeDays: z.number().int().min(1).max(3_650).optional(),
+  maxRunsPerTarget: z.number().int().min(1).max(10_000).optional(),
+  dryRun: z.boolean().default(true),
+  confirm: z.boolean().default(false),
+});
+
 function extractUrls(value: unknown): string[] {
   const urls = new Set<string>();
   const visit = (item: unknown, key = "") => {
@@ -308,6 +315,31 @@ export function registerCrawlerTools(
         return report;
       }, resultLimits),
   );
+
+  if (config.crawlerHistoryWriteToolsEnabled)
+    server.registerTool(
+      "crawler_cleanup_history",
+      {
+        title: "Clean retained crawl history",
+        description:
+          "Dry-run or atomically delete crawl snapshots outside age/count retention limits. Actual deletion requires confirm=true.",
+        inputSchema: crawlCleanupSchema,
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      (input) =>
+        handleTool(async () => {
+          if (!input.dryRun && !input.confirm)
+            throw new YandexApiError("VALIDATION", "Set confirm=true to delete crawl history");
+          const result = await snapshotStore.cleanup(input);
+          telemetry.event(input.dryRun ? "crawler_cleanup_dry_run" : "crawler_cleanup_completed");
+          return result;
+        }, resultLimits),
+    );
 
   server.registerTool(
     "crawler_reconcile_yandex_index",

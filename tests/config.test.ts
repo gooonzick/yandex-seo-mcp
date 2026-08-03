@@ -18,6 +18,7 @@ describe("loadConfig", () => {
     expect(config.crawlerSnapshotMaxRuns).toBe(100);
     expect(config.crawlerSnapshotQueryDenylist).toContain("access_token");
     expect(config.crawlerRegressionExclusions).toEqual([]);
+    expect(config.crawlerHistoryWriteToolsEnabled).toBe(false);
     expect(config.queryClusterThreshold).toBe(0.42);
     expect(config.queryMaxQueries).toBe(500);
   });
@@ -35,6 +36,12 @@ describe("loadConfig", () => {
         urlPrefixes: ["https://example.com/private/"],
       },
     ]);
+  });
+
+  it("enables destructive crawl history write tools explicitly", () => {
+    expect(loadConfig({ CRAWLER_HISTORY_WRITE_TOOLS_ENABLED: "true" })).toMatchObject({
+      crawlerHistoryWriteToolsEnabled: true,
+    });
   });
 
   it("prefers service-specific tokens and parses limits", () => {

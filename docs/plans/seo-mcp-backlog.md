@@ -145,6 +145,7 @@ Target-level exclusions задаются через `CRAWLER_REGRESSION_EXCLUSIO
 
 ### CRWL-007 — Добавить retention и очистку истории
 
+- Статус: `completed` (2026-08-03)
 - Размер: `S`
 - Зависимости: CRWL-002
 - Критерии приемки:
@@ -152,6 +153,13 @@ Target-level exclusions задаются через `CRAWLER_REGRESSION_EXCLUSIO
   - очистка не затрагивает активный run;
   - destructive tool доступен только при включенных write-tools;
   - dry-run показывает объем удаления.
+
+Реализация: age/count retention применяется при записи, а opt-in tool
+`crawler_cleanup_history` строит или атомарно применяет план очистки. Он удаляет
+run и все зависимые pages/issues/links/aggregates, сохраняет active `running`
+runs и возвращает объем удаления с bounded sample run IDs. Tool регистрируется
+только при `CRAWLER_HISTORY_WRITE_TOOLS_ENABLED=true`; запись дополнительно
+требует `dryRun=false` и `confirm=true`.
 
 ## 5. P0 — SEO Change Impact
 

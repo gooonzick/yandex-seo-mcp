@@ -23,7 +23,8 @@ recrawling, and the Metrica Logs API.
   report, incident-analysis and backlog prompts.
 - `stdio` transport for local MCP clients.
 - Streamable HTTP transport powered by Hono.
-- Write tools always registered and protected by explicit confirmation.
+- Upstream API write tools are registered and protected by explicit confirmation;
+  local destructive history cleanup is separately opt-in.
 - OAuth tokens are never accepted as tool arguments or returned in responses.
 - Retries for `429` and `5xx`, bounded concurrency, short-lived GET caching,
   request telemetry, inbound rate limiting, Zod validation, and result limits.
@@ -232,6 +233,8 @@ The crawler exposes:
   runs of the same target, with crawl configuration changes reported separately;
 - `crawler_detect_regressions` for grouped technical incidents with deterministic
   severity/confidence, mass-change detection and target-level exclusions;
+- `crawler_cleanup_history` (only when explicitly enabled) to preview or atomically
+  apply age/count retention without deleting active runs;
 - `crawler_analyze_internal_links` for orphan, deep, weakly linked and broken
   pages;
 - `crawler_reconcile_yandex_index` for Sitemap/crawl/Webmaster comparison and a
@@ -247,6 +250,11 @@ response body or fetch-error text. URL credentials, fragments and keys from
 `CRAWLER_SNAPSHOT_QUERY_DENYLIST` are removed before persistence. Age and
 per-target count limits are controlled by `CRAWLER_SNAPSHOT_RETENTION_DAYS` and
 `CRAWLER_SNAPSHOT_MAX_RUNS`.
+
+Set `CRAWLER_HISTORY_WRITE_TOOLS_ENABLED=true` to register
+`crawler_cleanup_history`. It defaults to dry-run and reports record counts plus
+a bounded run-ID sample. Actual deletion requires both `dryRun=false` and
+`confirm=true`; optional age/count inputs affect only that invocation.
 
 Before overwriting an existing valid storage file, the server preserves its
 previous generation at `<MONITOR_STORAGE_PATH>.bak` with mode `0600`. Invalid or
@@ -297,44 +305,45 @@ reproducible and lexical; editorial and live SERP validation are still required.
 
 ## Environment variables
 
-| Variable                             | Default                    | Description                                 |
-| ------------------------------------ | -------------------------- | ------------------------------------------- |
-| `YANDEX_OAUTH_TOKEN`                 | —                          | Shared fallback token                       |
-| `YANDEX_METRICA_TOKEN`               | —                          | Yandex Metrica token                        |
-| `YANDEX_WEBMASTER_TOKEN`             | —                          | Yandex Webmaster token                      |
-| `YANDEX_HTTP_TIMEOUT_MS`             | `30000`                    | Upstream request timeout                    |
-| `YANDEX_HTTP_MAX_RETRIES`            | `3`                        | Transient-error retry count                 |
-| `YANDEX_HTTP_MAX_CONCURRENCY`        | `8`                        | Maximum parallel upstream requests          |
-| `YANDEX_HTTP_CACHE_TTL_MS`           | `30000`                    | Successful GET cache lifetime; `0` disables |
-| `YANDEX_MAX_RESULT_ROWS`             | `1000`                     | Maximum items per result array              |
-| `YANDEX_MAX_RESULT_BYTES`            | `500000`                   | Maximum MCP response text size              |
-| `MONITOR_STORAGE_PATH`               | `.yandex-seo-monitor.json` | Monitoring and crawl snapshot file          |
-| `MONITOR_RETENTION_DAYS`             | `90`                       | Snapshot retention                          |
-| `MONITOR_INTERVAL_MS`                | `0`                        | Scheduler interval; `0` disables            |
-| `MONITOR_TARGETS_JSON`               | `[]`                       | Scheduled target definitions                |
-| `CRAWLER_MAX_PAGES`                  | `200`                      | Hard maximum pages per crawl                |
-| `CRAWLER_MAX_DEPTH`                  | `5`                        | Hard maximum link depth                     |
-| `CRAWLER_TIMEOUT_MS`                 | `15000`                    | Per-request crawler timeout                 |
-| `CRAWLER_MAX_BODY_BYTES`             | `2000000`                  | Maximum downloaded response body            |
-| `CRAWLER_CONCURRENCY`                | `4`                        | Maximum parallel crawler requests           |
-| `CRAWLER_DELAY_MS`                   | `0`                        | Minimum delay between crawler requests      |
-| `CRAWLER_USER_AGENT`                 | `YandexSeoMcpBot/1.0`      | Crawler HTTP user agent                     |
-| `CRAWLER_SNAPSHOT_RETENTION_DAYS`    | `90`                       | Maximum crawl snapshot age                  |
-| `CRAWLER_SNAPSHOT_MAX_RUNS`          | `100`                      | Maximum runs retained per target            |
-| `CRAWLER_SNAPSHOT_QUERY_DENYLIST`    | common secret keys         | Comma-separated URL query keys to omit      |
-| `CRAWLER_REGRESSION_EXCLUSIONS_JSON` | `[]`                       | Target-level regression exclusion policies  |
-| `QUERY_CLUSTER_THRESHOLD`            | `0.42`                     | Minimum lexical clustering similarity       |
-| `QUERY_MAX_QUERIES`                  | `500`                      | Maximum Webmaster queries per analysis      |
-| `MCP_TRANSPORT`                      | `stdio`                    | Transport: `stdio` or `http`                |
-| `MCP_HTTP_HOST`                      | `127.0.0.1`                | HTTP bind address                           |
-| `MCP_HTTP_PORT`                      | `3000`                     | HTTP port                                   |
-| `MCP_HTTP_BEARER_TOKEN`              | —                          | Static HTTP bearer token                    |
-| `MCP_HTTP_RATE_LIMIT_PER_MINUTE`     | `120`                      | Per-address HTTP request limit              |
-| `YANDEX_OAUTH_CLIENT_ID`             | —                          | Multi-user OAuth client ID                  |
-| `YANDEX_OAUTH_CLIENT_SECRET`         | —                          | OAuth confidential-client secret            |
-| `YANDEX_OAUTH_REDIRECT_URI`          | —                          | Exact public callback URL                   |
-| `YANDEX_OAUTH_STORAGE_KEY`           | —                          | Encryption key material, at least 32 chars  |
-| `YANDEX_OAUTH_STORAGE_PATH`          | `.yandex-seo-oauth.enc`    | Encrypted OAuth profile store               |
+| Variable                              | Default                    | Description                                 |
+| ------------------------------------- | -------------------------- | ------------------------------------------- |
+| `YANDEX_OAUTH_TOKEN`                  | —                          | Shared fallback token                       |
+| `YANDEX_METRICA_TOKEN`                | —                          | Yandex Metrica token                        |
+| `YANDEX_WEBMASTER_TOKEN`              | —                          | Yandex Webmaster token                      |
+| `YANDEX_HTTP_TIMEOUT_MS`              | `30000`                    | Upstream request timeout                    |
+| `YANDEX_HTTP_MAX_RETRIES`             | `3`                        | Transient-error retry count                 |
+| `YANDEX_HTTP_MAX_CONCURRENCY`         | `8`                        | Maximum parallel upstream requests          |
+| `YANDEX_HTTP_CACHE_TTL_MS`            | `30000`                    | Successful GET cache lifetime; `0` disables |
+| `YANDEX_MAX_RESULT_ROWS`              | `1000`                     | Maximum items per result array              |
+| `YANDEX_MAX_RESULT_BYTES`             | `500000`                   | Maximum MCP response text size              |
+| `MONITOR_STORAGE_PATH`                | `.yandex-seo-monitor.json` | Monitoring and crawl snapshot file          |
+| `MONITOR_RETENTION_DAYS`              | `90`                       | Snapshot retention                          |
+| `MONITOR_INTERVAL_MS`                 | `0`                        | Scheduler interval; `0` disables            |
+| `MONITOR_TARGETS_JSON`                | `[]`                       | Scheduled target definitions                |
+| `CRAWLER_MAX_PAGES`                   | `200`                      | Hard maximum pages per crawl                |
+| `CRAWLER_MAX_DEPTH`                   | `5`                        | Hard maximum link depth                     |
+| `CRAWLER_TIMEOUT_MS`                  | `15000`                    | Per-request crawler timeout                 |
+| `CRAWLER_MAX_BODY_BYTES`              | `2000000`                  | Maximum downloaded response body            |
+| `CRAWLER_CONCURRENCY`                 | `4`                        | Maximum parallel crawler requests           |
+| `CRAWLER_DELAY_MS`                    | `0`                        | Minimum delay between crawler requests      |
+| `CRAWLER_USER_AGENT`                  | `YandexSeoMcpBot/1.0`      | Crawler HTTP user agent                     |
+| `CRAWLER_SNAPSHOT_RETENTION_DAYS`     | `90`                       | Maximum crawl snapshot age                  |
+| `CRAWLER_SNAPSHOT_MAX_RUNS`           | `100`                      | Maximum runs retained per target            |
+| `CRAWLER_SNAPSHOT_QUERY_DENYLIST`     | common secret keys         | Comma-separated URL query keys to omit      |
+| `CRAWLER_REGRESSION_EXCLUSIONS_JSON`  | `[]`                       | Target-level regression exclusion policies  |
+| `CRAWLER_HISTORY_WRITE_TOOLS_ENABLED` | `false`                    | Register destructive crawl cleanup tool     |
+| `QUERY_CLUSTER_THRESHOLD`             | `0.42`                     | Minimum lexical clustering similarity       |
+| `QUERY_MAX_QUERIES`                   | `500`                      | Maximum Webmaster queries per analysis      |
+| `MCP_TRANSPORT`                       | `stdio`                    | Transport: `stdio` or `http`                |
+| `MCP_HTTP_HOST`                       | `127.0.0.1`                | HTTP bind address                           |
+| `MCP_HTTP_PORT`                       | `3000`                     | HTTP port                                   |
+| `MCP_HTTP_BEARER_TOKEN`               | —                          | Static HTTP bearer token                    |
+| `MCP_HTTP_RATE_LIMIT_PER_MINUTE`      | `120`                      | Per-address HTTP request limit              |
+| `YANDEX_OAUTH_CLIENT_ID`              | —                          | Multi-user OAuth client ID                  |
+| `YANDEX_OAUTH_CLIENT_SECRET`          | —                          | OAuth confidential-client secret            |
+| `YANDEX_OAUTH_REDIRECT_URI`           | —                          | Exact public callback URL                   |
+| `YANDEX_OAUTH_STORAGE_KEY`            | —                          | Encryption key material, at least 32 chars  |
+| `YANDEX_OAUTH_STORAGE_PATH`           | `.yandex-seo-oauth.enc`    | Encrypted OAuth profile store               |
 
 See [.env.example](.env.example) for a complete configuration template.
 
@@ -346,6 +355,8 @@ See [.env.example](.env.example) for a complete configuration template.
 - Logs API downloads are always constrained by the MCP response-size limit.
 - Counter/grant management, host/verification/Sitemap management, Logs cleanup
   and cancellation, and recrawl actions require `confirm: true`.
+- Crawl history cleanup is absent unless explicitly enabled and still requires
+  `dryRun=false` plus `confirm=true` before deleting records.
 - Errors return safe categories and request IDs without exposing authorization
   headers.
 - Monitoring files use owner-only permissions; OAuth tokens are encrypted at

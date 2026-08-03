@@ -17,6 +17,7 @@ const config: AppConfig = {
   transport: "stdio",
   httpHost: "127.0.0.1",
   httpPort: 3000,
+  crawlerHistoryWriteToolsEnabled: true,
 };
 
 describe("Yandex SEO MCP server", () => {
@@ -274,6 +275,7 @@ describe("Yandex SEO MCP server", () => {
     expect(names).toContain("crawler_get_snapshot");
     expect(names).toContain("crawler_compare_snapshots");
     expect(names).toContain("crawler_detect_regressions");
+    expect(names).toContain("crawler_cleanup_history");
     expect(names).toContain("crawler_reconcile_yandex_index");
     expect(names).toContain("crawler_analyze_internal_links");
     expect(names).toContain("query_intelligence_cluster_queries");
@@ -295,6 +297,22 @@ describe("Yandex SEO MCP server", () => {
     expect(names).toContain("webmaster_request_verification");
     expect(names).toContain("webmaster_add_user_sitemap");
     expect(names).toContain("webmaster_delete_user_sitemap");
+
+    const disabled = createServer({
+      config: { ...config, crawlerHistoryWriteToolsEnabled: false },
+      fetch: fetchMock as unknown as typeof fetch,
+      resolveHost: async () => ["93.184.216.34"],
+    });
+    const disabledClient = new Client({ name: "disabled-test-client", version: "1.0.0" });
+    const [disabledClientTransport, disabledServerTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([
+      disabledClient.connect(disabledClientTransport),
+      disabled.server.connect(disabledServerTransport),
+    ]);
+    expect((await disabledClient.listTools()).tools.map(({ name }) => name)).not.toContain(
+      "crawler_cleanup_history",
+    );
+    await Promise.all([disabledClient.close(), disabled.server.close()]);
   });
 
   it("saves the latest crawl through the MCP tool idempotently", async () => {
@@ -373,6 +391,22 @@ describe("Yandex SEO MCP server", () => {
       summary: { incidentCount: 0, affectedUrlCount: 0 },
       incidents: [],
     });
+    const cleanup = await client.callTool({
+      name: "crawler_cleanup_history",
+      arguments: { maxRunsPerTarget: 1, dryRun: true },
+    });
+    expect(cleanup.isError).not.toBe(true);
+    expect(cleanup.structuredContent).toMatchObject({
+      dryRun: true,
+      deleted: { runs: 1, pages: 2 },
+      activeRunsProtected: 0,
+    });
+    const unconfirmed = await client.callTool({
+      name: "crawler_cleanup_history",
+      arguments: { maxRunsPerTarget: 1, dryRun: false },
+    });
+    expect(unconfirmed.isError).toBe(true);
+    expect(unconfirmed.structuredContent).toMatchObject({ code: "VALIDATION" });
   });
 
   it("paginates monitoring snapshots with an opaque cursor", async () => {
@@ -430,6 +464,7 @@ describe("Yandex SEO MCP server", () => {
         metrica: { configured: true },
         webmaster: { configured: true },
       },
+      crawler: { historyCleanupEnabled: true },
       writeToolsEnabled: true,
     });
     expect(fetchMock).not.toHaveBeenCalled();

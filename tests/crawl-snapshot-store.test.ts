@@ -310,4 +310,33 @@ describe("CrawlSnapshotStore", () => {
       store.compare(baseline.runId, "33333333-3333-4333-8333-333333333333", 10),
     ).rejects.toThrow(/not found/);
   });
+
+  it("previews and atomically applies crawl history cleanup", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "yandex-seo-crawl-cleanup-"));
+    const filePath = join(directory, "snapshots.json");
+    const store = new CrawlSnapshotStore(filePath, { maxAgeDays: 90, maxRunsPerTarget: 100 });
+    const newer: CrawlResult = {
+      ...structuredClone(result),
+      runId: "22222222-2222-4222-8222-222222222222",
+      startedAt: "2026-08-03T11:00:00.000Z",
+      finishedAt: "2026-08-03T11:01:00.000Z",
+    };
+    await store.save(result);
+    await store.save(newer);
+
+    const dryRun = await store.cleanup({ maxRunsPerTarget: 1, dryRun: true });
+    expect(dryRun).toEqual({
+      dryRun: true,
+      policy: { maxAgeDays: 90, maxRunsPerTarget: 1 },
+      deleted: { runs: 1, pages: 1, issues: 3, links: 2, aggregates: 1 },
+      activeRunsProtected: 0,
+      sampleDeletedRunIds: [result.runId],
+    });
+    expect(await store.getSummary(result.runId)).toBeDefined();
+
+    const applied = await store.cleanup({ maxAgeDays: 90, maxRunsPerTarget: 1, dryRun: false });
+    expect(applied).toMatchObject({ dryRun: false, deleted: { runs: 1 } });
+    expect(await store.getSummary(result.runId)).toBeUndefined();
+    expect(await store.getSummary(newer.runId)).toBeDefined();
+  });
 });

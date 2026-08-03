@@ -33,6 +33,9 @@
 - Grouped technical regression detection via `crawler_detect_regressions` for
   HTTP errors, noindex, canonical drift, redirect chains, orphan pages and lost
   internal links, with deterministic scoring and target-level exclusions.
+- Age/count crawl retention and opt-in atomic cleanup via
+  `crawler_cleanup_history`, with protected active runs, deletion-volume dry-run
+  and explicit confirmation for destructive execution.
 - MCP resources и prompts для типовых SEO workflow.
 - GET cache, bounded concurrency, HTTP rate limiting, telemetry и readiness endpoint.
 - Multi-user OAuth Authorization Code + PKCE, encrypted profile storage и изолированные bearer sessions.

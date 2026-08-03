@@ -35,6 +35,10 @@ const environmentSchema = z.object({
       "access_token,api_key,apikey,auth,authorization,code,credential,key,password,secret,session,sessionid,sid,token",
     ),
   CRAWLER_REGRESSION_EXCLUSIONS_JSON: z.string().default("[]"),
+  CRAWLER_HISTORY_WRITE_TOOLS_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
   QUERY_CLUSTER_THRESHOLD: z.coerce.number().min(0.1).max(1).default(0.42),
   QUERY_MAX_QUERIES: z.coerce.number().int().min(10).max(2_000).default(500),
   YANDEX_OAUTH_CLIENT_ID: z.string().min(1).optional(),
@@ -73,6 +77,7 @@ export interface AppConfig {
   crawlerSnapshotMaxRuns?: number;
   crawlerSnapshotQueryDenylist?: string[];
   crawlerRegressionExclusions?: CrawlRegressionExclusion[];
+  crawlerHistoryWriteToolsEnabled?: boolean;
   queryClusterThreshold?: number;
   queryMaxQueries?: number;
   oauthClientId?: string;
@@ -144,6 +149,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
       .map((key) => key.trim().toLowerCase())
       .filter(Boolean),
     crawlerRegressionExclusions,
+    crawlerHistoryWriteToolsEnabled: parsed.CRAWLER_HISTORY_WRITE_TOOLS_ENABLED,
     queryClusterThreshold: parsed.QUERY_CLUSTER_THRESHOLD,
     queryMaxQueries: parsed.QUERY_MAX_QUERIES,
     transport: parsed.MCP_TRANSPORT,

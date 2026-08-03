@@ -1,7 +1,7 @@
 # Crawl snapshot storage
 
-Status: storage model, snapshot persistence/reads and snapshot comparison
-implemented by `CRWL-001` through `CRWL-005` on 2026-08-03.
+Status: crawl history, comparison, regression detection and retention cleanup
+implemented by `CRWL-001` through `CRWL-007` on 2026-08-03.
 
 ## Container and migrations
 
@@ -158,4 +158,14 @@ schema rejects a URL that is not already normalized.
 `CRAWLER_SNAPSHOT_MAX_RUNS` (default 100 per target). It removes dependent page,
 issue, link and aggregate records together with an expired run. Active `running`
 runs are never removed. Every successful snapshot write invokes this policy;
-`CRWL-007` will expose cleanup/dry-run operations.
+reads apply the same policy in memory so expired records are never returned.
+
+`crawler_cleanup_history` persists that pruning plan atomically. The tool is not
+registered unless `CRAWLER_HISTORY_WRITE_TOOLS_ENABLED=true`. Dry-run is the
+default and reports deletion counts for runs, pages, issues, links and aggregates,
+the configured/effective policy, protected active-run count and at most 50 sample
+run IDs. An actual cleanup additionally requires `dryRun=false` and `confirm=true`.
+Optional `maxAgeDays` and `maxRunsPerTarget` inputs override configured limits for
+that invocation without changing configuration. Storage serialization prevents a
+cleanup from racing another monitoring or crawl write, and the standard rolling
+backup preserves the previous valid generation.

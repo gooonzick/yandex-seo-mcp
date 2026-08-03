@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { StorageFile } from "../storage/file-store.js";
-import { pruneCrawlHistory, type CrawlRetentionPolicy } from "../storage/retention.js";
+import {
+  planCrawlHistoryCleanup,
+  pruneCrawlHistory,
+  type CrawlCleanupCounts,
+  type CrawlRetentionPolicy,
+} from "../storage/retention.js";
 import { YandexApiError } from "../shared/errors.js";
 import {
   createPaginationScope,
@@ -55,6 +60,20 @@ export interface CrawlSnapshotSummary {
   run: CrawlRun;
   aggregate: CrawlAggregate | null;
   counts: { pages: number; issues: number; links: number };
+}
+
+export interface CleanupCrawlHistoryOptions {
+  maxAgeDays?: number | undefined;
+  maxRunsPerTarget?: number | undefined;
+  dryRun: boolean;
+}
+
+export interface CleanupCrawlHistoryResult {
+  dryRun: boolean;
+  policy: CrawlRetentionPolicy;
+  deleted: CrawlCleanupCounts;
+  activeRunsProtected: number;
+  sampleDeletedRunIds: string[];
 }
 
 export interface ListCrawlSnapshotsOptions {
@@ -388,6 +407,34 @@ export class CrawlSnapshotStore {
     if (beforeRun.target !== afterRun.target)
       throw new YandexApiError("VALIDATION", "Crawl snapshots must have the same target");
     return detectCrawlRegressions(data, beforeRun, afterRun, sampleLimit, exclusions);
+  }
+
+  public async cleanup(options: CleanupCrawlHistoryOptions): Promise<CleanupCrawlHistoryResult> {
+    const policy = {
+      maxAgeDays: options.maxAgeDays ?? this.retention.maxAgeDays,
+      maxRunsPerTarget: options.maxRunsPerTarget ?? this.retention.maxRunsPerTarget,
+    };
+    if (!Number.isInteger(policy.maxAgeDays) || policy.maxAgeDays <= 0)
+      throw new YandexApiError("VALIDATION", "maxAgeDays must be a positive integer");
+    if (!Number.isInteger(policy.maxRunsPerTarget) || policy.maxRunsPerTarget <= 0)
+      throw new YandexApiError("VALIDATION", "maxRunsPerTarget must be a positive integer");
+    const response = (
+      plan: ReturnType<typeof planCrawlHistoryCleanup>,
+    ): CleanupCrawlHistoryResult => ({
+      dryRun: options.dryRun,
+      policy,
+      deleted: plan.deleted,
+      activeRunsProtected: plan.activeRunCount,
+      sampleDeletedRunIds: plan.deletedRunIds.slice(0, 50),
+    });
+    if (options.dryRun) return response(planCrawlHistoryCleanup(await this.storage.read(), policy));
+    let result: CleanupCrawlHistoryResult | undefined;
+    await this.storage.update((data) => {
+      const plan = planCrawlHistoryCleanup(data, policy);
+      result = response(plan);
+      return plan.retained;
+    });
+    return result!;
   }
 
   private summary(data: StorageData, run: CrawlRun): CrawlSnapshotSummary {
