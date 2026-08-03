@@ -24,6 +24,49 @@ describe("MonitoringStore", () => {
       target: "production",
       organic: { visits: 100 },
     });
-    expect(JSON.parse(await readFile(filePath, "utf8"))).toMatchObject({ version: 1 });
+    expect(JSON.parse(await readFile(filePath, "utf8"))).toMatchObject({
+      version: 2,
+      monitoringSnapshots: [{ id: snapshot.id }],
+      crawl: { runs: [] },
+    });
+  });
+
+  it("reads legacy v1 snapshots and migrates them without data loss", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "yandex-seo-monitor-legacy-"));
+    const filePath = join(directory, "snapshots.json");
+    const legacy = {
+      version: 1,
+      snapshots: [
+        {
+          id: "legacy-snapshot",
+          target: "production",
+          hostId: "https:example.com:443",
+          capturedAt: new Date().toISOString(),
+          summary: {},
+          diagnostics: {},
+          sitemaps: {},
+        },
+      ],
+    };
+    await import("node:fs/promises").then(({ writeFile }) =>
+      writeFile(filePath, JSON.stringify(legacy), "utf8"),
+    );
+
+    const store = new MonitoringStore(filePath, 90);
+    expect(await store.list()).toMatchObject([{ id: "legacy-snapshot" }]);
+    await store.add({
+      target: "staging",
+      hostId: "https:staging.example.com:443",
+      summary: {},
+      diagnostics: {},
+      sitemaps: {},
+    });
+
+    const migrated = JSON.parse(await readFile(filePath, "utf8")) as {
+      version: number;
+      monitoringSnapshots: Array<{ id: string }>;
+    };
+    expect(migrated.version).toBe(2);
+    expect(migrated.monitoringSnapshots.map(({ id }) => id)).toContain("legacy-snapshot");
   });
 });

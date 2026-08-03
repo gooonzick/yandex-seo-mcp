@@ -14,6 +14,9 @@ describe("loadConfig", () => {
     expect(config.monitorRetentionDays).toBe(90);
     expect(config.crawlerMaxPages).toBe(200);
     expect(config.crawlerMaxDepth).toBe(5);
+    expect(config.crawlerSnapshotRetentionDays).toBe(90);
+    expect(config.crawlerSnapshotMaxRuns).toBe(100);
+    expect(config.crawlerSnapshotQueryDenylist).toContain("access_token");
     expect(config.queryClusterThreshold).toBe(0.42);
     expect(config.queryMaxQueries).toBe(500);
   });

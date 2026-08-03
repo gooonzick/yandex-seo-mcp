@@ -23,6 +23,13 @@ const environmentSchema = z.object({
   CRAWLER_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(4),
   CRAWLER_DELAY_MS: z.coerce.number().int().min(0).default(0),
   CRAWLER_USER_AGENT: z.string().min(1).max(200).default("YandexSeoMcpBot/1.0"),
+  CRAWLER_SNAPSHOT_RETENTION_DAYS: positiveInteger(90),
+  CRAWLER_SNAPSHOT_MAX_RUNS: positiveInteger(100),
+  CRAWLER_SNAPSHOT_QUERY_DENYLIST: z
+    .string()
+    .default(
+      "access_token,api_key,apikey,auth,authorization,code,credential,key,password,secret,session,sessionid,sid,token",
+    ),
   QUERY_CLUSTER_THRESHOLD: z.coerce.number().min(0.1).max(1).default(0.42),
   QUERY_MAX_QUERIES: z.coerce.number().int().min(10).max(2_000).default(500),
   YANDEX_OAUTH_CLIENT_ID: z.string().min(1).optional(),
@@ -57,6 +64,9 @@ export interface AppConfig {
   crawlerConcurrency?: number;
   crawlerDelayMs?: number;
   crawlerUserAgent?: string;
+  crawlerSnapshotRetentionDays?: number;
+  crawlerSnapshotMaxRuns?: number;
+  crawlerSnapshotQueryDenylist?: string[];
   queryClusterThreshold?: number;
   queryMaxQueries?: number;
   oauthClientId?: string;
@@ -113,6 +123,11 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     crawlerConcurrency: parsed.CRAWLER_CONCURRENCY,
     crawlerDelayMs: parsed.CRAWLER_DELAY_MS,
     crawlerUserAgent: parsed.CRAWLER_USER_AGENT,
+    crawlerSnapshotRetentionDays: parsed.CRAWLER_SNAPSHOT_RETENTION_DAYS,
+    crawlerSnapshotMaxRuns: parsed.CRAWLER_SNAPSHOT_MAX_RUNS,
+    crawlerSnapshotQueryDenylist: parsed.CRAWLER_SNAPSHOT_QUERY_DENYLIST.split(",")
+      .map((key) => key.trim().toLowerCase())
+      .filter(Boolean),
     queryClusterThreshold: parsed.QUERY_CLUSTER_THRESHOLD,
     queryMaxQueries: parsed.QUERY_MAX_QUERIES,
     transport: parsed.MCP_TRANSPORT,

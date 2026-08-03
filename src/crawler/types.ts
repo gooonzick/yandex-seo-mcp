@@ -50,6 +50,9 @@ export interface SitemapEntry {
 }
 
 export interface CrawlResult {
+  runId: string;
+  status: "completed" | "partial";
+  partialReasons: string[];
   startedAt: string;
   finishedAt: string;
   startUrl: string;

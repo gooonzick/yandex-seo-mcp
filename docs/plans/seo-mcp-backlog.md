@@ -39,6 +39,7 @@
 
 ### CRWL-001 — Спроектировать модель хранения crawl snapshots
 
+- Статус: `completed` (2026-08-03)
 - Размер: `M`
 - Зависимости: нет
 - Результат: схема для run, page, issue, link edge и агрегатов.
@@ -49,8 +50,13 @@
   - хранение ограничивается retention-настройкой;
   - старые monitoring snapshots продолжают читаться.
 
+Реализация: [контракт хранения crawl snapshots](../architecture/crawl-snapshot-storage.md),
+версионированная схема `v2`, миграция monitoring `v1`, единая нормализация URL и
+retention policy с unit-тестами.
+
 ### CRWL-002 — Сохранять завершенный аудит
 
+- Статус: `completed` (2026-08-03)
 - Размер: `M`
 - Зависимости: CRWL-001
 - Предлагаемый tool: `crawler_save_snapshot`
@@ -59,6 +65,12 @@
   - повторная запись одного run идемпотентна;
   - неполный crawl явно маркируется;
   - секреты, query-параметры из denylist и содержимое страниц не сохраняются.
+
+Реализация: `crawler_audit_site` возвращает стабильный `runId` и явный статус
+`completed`/`partial`, а `crawler_save_snapshot` выполняет dry-run или подтвержденную
+идемпотентную запись страниц, технических признаков, issues, link graph и агрегатов.
+Запись атомарна, применяет retention и очищает credentials, fragments и denylist
+query-параметры; response body и тексты fetch errors не сохраняются.
 
 ### CRWL-003 — Добавить список и получение crawl snapshots
 

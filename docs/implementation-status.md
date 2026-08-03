@@ -15,6 +15,10 @@
 - Пакетный SEO-аудит с health score и приоритетными рекомендациями.
 - Сегментные и атрибуционные пресеты Метрики, включая ecommerce и comparison report.
 - Persistent monitoring snapshots, regression alerts, retention и interval scheduler.
+- Модель crawl snapshot storage `v2`: runs, pages, issues, link edges и агрегаты;
+  миграция legacy monitoring `v1`, URL normalization и age/count retention policy.
+- Идемпотентная запись crawl snapshots через `crawler_save_snapshot`: atomic write,
+  partial-run markers, query denylist, dry-run/confirmation и storage telemetry.
 - MCP resources и prompts для типовых SEO workflow.
 - GET cache, bounded concurrency, HTTP rate limiting, telemetry и readiness endpoint.
 - Multi-user OAuth Authorization Code + PKCE, encrypted profile storage и изолированные bearer sessions.

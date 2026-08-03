@@ -1,3 +1,6 @@
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -220,8 +223,9 @@ describe("Yandex SEO MCP server", () => {
       });
     });
 
+    const storageDirectory = await mkdtemp(join(tmpdir(), "yandex-seo-server-"));
     const created = createServer({
-      config,
+      config: { ...config, monitorStoragePath: join(storageDirectory, "snapshots.json") },
       fetch: fetchMock as unknown as typeof fetch,
       resolveHost: async () => ["93.184.216.34"],
     });
@@ -264,6 +268,7 @@ describe("Yandex SEO MCP server", () => {
     expect(names).toContain("monitor_capture_snapshot");
     expect(names).toContain("monitor_check_alerts");
     expect(names).toContain("crawler_audit_site");
+    expect(names).toContain("crawler_save_snapshot");
     expect(names).toContain("crawler_reconcile_yandex_index");
     expect(names).toContain("crawler_analyze_internal_links");
     expect(names).toContain("query_intelligence_cluster_queries");
@@ -285,6 +290,29 @@ describe("Yandex SEO MCP server", () => {
     expect(names).toContain("webmaster_request_verification");
     expect(names).toContain("webmaster_add_user_sitemap");
     expect(names).toContain("webmaster_delete_user_sitemap");
+  });
+
+  it("saves the latest crawl through the MCP tool idempotently", async () => {
+    const audit = await client.callTool({
+      name: "crawler_audit_site",
+      arguments: { startUrl: "https://example.com/", maxPages: 10 },
+    });
+    const runId = (audit.structuredContent as { runId?: string } | undefined)?.runId;
+    expect(audit.isError).not.toBe(true);
+    expect(runId).toMatch(/^[0-9a-f-]{36}$/);
+
+    const saved = await client.callTool({
+      name: "crawler_save_snapshot",
+      arguments: { runId, dryRun: false, confirm: true },
+    });
+    const repeated = await client.callTool({
+      name: "crawler_save_snapshot",
+      arguments: { runId, dryRun: false, confirm: true },
+    });
+
+    expect(saved.isError).not.toBe(true);
+    expect(saved.structuredContent).toMatchObject({ runId, created: true, dryRun: false });
+    expect(repeated.structuredContent).toMatchObject({ runId, created: false, dryRun: false });
   });
 
   it("returns capabilities without making HTTP requests", async () => {

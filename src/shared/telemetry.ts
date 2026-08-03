@@ -8,6 +8,7 @@ export interface TelemetrySnapshot {
   inFlight: number;
   averageDurationMs: number;
   byStatus: Record<string, number>;
+  events: Record<string, number>;
 }
 
 class Telemetry {
@@ -20,6 +21,7 @@ class Telemetry {
   private inFlight = 0;
   private totalDurationMs = 0;
   private readonly byStatus = new Map<string, number>();
+  private readonly events = new Map<string, number>();
 
   public begin(): () => void {
     this.requests += 1;
@@ -49,6 +51,10 @@ class Telemetry {
     this.cacheHits += 1;
   }
 
+  public event(name: string): void {
+    this.events.set(name, (this.events.get(name) ?? 0) + 1);
+  }
+
   public snapshot(): TelemetrySnapshot {
     return {
       startedAt: this.startedAt,
@@ -61,6 +67,7 @@ class Telemetry {
       averageDurationMs:
         this.requests === 0 ? 0 : Math.round((this.totalDurationMs / this.requests) * 100) / 100,
       byStatus: Object.fromEntries(this.byStatus),
+      events: Object.fromEntries(this.events),
     };
   }
 

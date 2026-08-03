@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { parseHtml } from "./parser.js";
 import { isAllowedByRobots, parseRobots } from "./robots.js";
 import { assertSafePublicUrl, defaultHostResolver } from "./security.js";
@@ -125,6 +126,7 @@ export class SeoCrawler {
   }
 
   public async crawl(startUrlValue: string, limits: CrawlLimits): Promise<CrawlResult> {
+    const runId = randomUUID();
     const startedAt = new Date().toISOString();
     const startUrl = new URL(startUrlValue);
     startUrl.hash = "";
@@ -151,6 +153,9 @@ export class SeoCrawler {
     const discovered = new Set(queue.map((item) => item.url));
     const pages: CrawledPage[] = [];
     let blockedByRobots = 0;
+    let discoveryLimited = sitemapEntries.some(
+      (entry) => new URL(entry.url).origin === origin && !seeded.has(normalizeUrl(entry.url)),
+    );
     const effectiveDelay = Math.max(limits.delayMs, robots.crawlDelayMs ?? 0);
 
     while (queue.length > 0 && pages.length < limits.maxPages) {
@@ -175,7 +180,11 @@ export class SeoCrawler {
         if (!page.metadata || page.depth >= limits.maxDepth) continue;
         for (const link of page.metadata.internalLinks) {
           const normalized = normalizeUrl(link);
-          if (discovered.has(normalized) || discovered.size >= limits.maxPages * 10) continue;
+          if (discovered.has(normalized)) continue;
+          if (discovered.size >= limits.maxPages * 10) {
+            discoveryLimited = true;
+            continue;
+          }
           discovered.add(normalized);
           queue.push({ url: normalized, depth: page.depth + 1 });
         }
@@ -220,7 +229,15 @@ export class SeoCrawler {
     const issueCounts: Record<string, number> = {};
     for (const page of pages)
       for (const issue of page.issues) issueCounts[issue] = (issueCounts[issue] ?? 0) + 1;
+    const partialReasons = [
+      ...(queue.length > 0 ? ["PAGE_LIMIT_REACHED"] : []),
+      ...(discoveryLimited ? ["DISCOVERY_LIMIT_REACHED"] : []),
+      ...(pages.some((page) => page.fetchError) ? ["FETCH_ERRORS"] : []),
+    ];
     const result: CrawlResult = {
+      runId,
+      status: partialReasons.length > 0 ? "partial" : "completed",
+      partialReasons,
       startedAt,
       finishedAt: new Date().toISOString(),
       startUrl: normalizeUrl(startUrl.href),

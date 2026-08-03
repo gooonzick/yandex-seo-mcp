@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AppConfig } from "./config.js";
 import { SeoCrawler } from "./crawler/crawler.js";
+import { CrawlSnapshotStore } from "./crawler/snapshot-store.js";
 import { registerCrawlerTools } from "./crawler/tools.js";
 import type { HostResolver } from "./crawler/types.js";
 import { registerQueryIntelligenceTools } from "./intelligence/tools.js";
@@ -28,6 +29,7 @@ export interface YandexSeoServer {
   webmaster: WebmasterClient;
   monitoring: MonitoringStore;
   crawler: SeoCrawler;
+  crawlSnapshots: CrawlSnapshotStore;
 }
 
 export function createServer(dependencies: ServerDependencies): YandexSeoServer {
@@ -65,6 +67,14 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
     ...(dependencies.fetch ? { fetch: dependencies.fetch } : {}),
     ...(dependencies.resolveHost ? { resolveHost: dependencies.resolveHost } : {}),
   });
+  const crawlSnapshots = new CrawlSnapshotStore(
+    config.monitorStoragePath ?? ".yandex-seo-monitor.json",
+    {
+      maxAgeDays: config.crawlerSnapshotRetentionDays ?? 90,
+      maxRunsPerTarget: config.crawlerSnapshotMaxRuns ?? 100,
+    },
+    config.crawlerSnapshotQueryDenylist,
+  );
 
   server.registerTool(
     "yandex_capabilities",
@@ -99,6 +109,8 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
             maxDepth: config.crawlerMaxDepth ?? 5,
             concurrency: config.crawlerConcurrency ?? 4,
             maxBodyBytes: config.crawlerMaxBodyBytes ?? 2_000_000,
+            snapshotRetentionDays: config.crawlerSnapshotRetentionDays ?? 90,
+            snapshotMaxRunsPerTarget: config.crawlerSnapshotMaxRuns ?? 100,
           },
           queryIntelligence: {
             maxQueries: config.queryMaxQueries ?? 500,
@@ -156,8 +168,8 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
   registerSeoTools(server, metrica, webmaster, config);
   registerMonitoringTools(server, monitoring, metrica, webmaster, config);
   registerMcpContent(server, metrica, webmaster, monitoring, config);
-  registerCrawlerTools(server, crawler, webmaster, config);
+  registerCrawlerTools(server, crawler, crawlSnapshots, webmaster, config);
   registerQueryIntelligenceTools(server, webmaster, crawler, config);
 
-  return { server, metrica, webmaster, monitoring, crawler };
+  return { server, metrica, webmaster, monitoring, crawler, crawlSnapshots };
 }

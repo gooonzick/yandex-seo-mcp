@@ -2,8 +2,10 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AppConfig } from "../config.js";
 import { handleTool, type ResultLimits } from "../shared/result.js";
+import { telemetry } from "../shared/telemetry.js";
 import type { WebmasterClient } from "../webmaster/client.js";
 import { SeoCrawler } from "./crawler.js";
+import type { CrawlSnapshotStore } from "./snapshot-store.js";
 import { isAllowedByRobots } from "./robots.js";
 import type { CrawlLimits, CrawlResult } from "./types.js";
 
@@ -122,6 +124,7 @@ function recommendations(result: CrawlResult) {
 export function registerCrawlerTools(
   server: McpServer,
   crawler: SeoCrawler,
+  snapshotStore: CrawlSnapshotStore,
   webmaster: WebmasterClient,
   config: AppConfig,
 ): void {
@@ -141,6 +144,48 @@ export function registerCrawlerTools(
     },
     (input) =>
       handleTool(() => crawler.crawl(input.startUrl, crawlLimits(config, input)), resultLimits),
+  );
+
+  server.registerTool(
+    "crawler_save_snapshot",
+    {
+      title: "Save the most recent crawl snapshot",
+      description:
+        "Persist the completed or partial crawl identified by runId. Dry-run is the default; an actual write requires confirm=true.",
+      inputSchema: z.object({
+        runId: z.uuid(),
+        dryRun: z.boolean().default(true),
+        confirm: z.boolean().default(false),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    (input) =>
+      handleTool(async () => {
+        const result = crawler.getLastResult();
+        if (!result || result.runId !== input.runId)
+          throw new Error("The requested run is not the most recent crawl in this server process");
+        if (!input.dryRun && !input.confirm)
+          throw new Error("Set confirm=true to persist the crawl snapshot");
+        try {
+          const saved = await snapshotStore.save(result, input.dryRun);
+          telemetry.event(
+            input.dryRun
+              ? "crawler_snapshot_dry_run"
+              : saved.created
+                ? "crawler_snapshot_created"
+                : "crawler_snapshot_idempotent",
+          );
+          return saved;
+        } catch (error) {
+          telemetry.event("crawler_snapshot_failure");
+          throw error;
+        }
+      }, resultLimits),
   );
 
   server.registerTool(
