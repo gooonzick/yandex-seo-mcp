@@ -44,6 +44,25 @@ describe("crawl storage schema", () => {
     expect(() => migrateStorage({ version: 99 })).toThrow(/Unsupported storage schema version/);
   });
 
+  it("continues to validate issues written with an older fingerprint version", () => {
+    const data = emptyStorage();
+    const runId = "11111111-1111-4111-8111-111111111111";
+    data.crawl.runs.push(run(runId, "https://example.com/", "2026-08-01T00:00:00.000Z"));
+    data.crawl.issues.push({
+      id: "22222222-2222-4222-8222-222222222222",
+      runId,
+      pageUrl: "https://example.com/page",
+      code: "SHORT_TITLE",
+      category: "metadata",
+      severity: "info",
+      fingerprint: "legacy-fingerprint",
+      fingerprintVersion: 1,
+      details: {},
+    });
+
+    expect(storageSchema.parse(data).crawl.issues[0]?.fingerprintVersion).toBe(1);
+  });
+
   it("applies age and per-target retention while preserving active runs", () => {
     const data = emptyStorage();
     data.crawl.runs.push(

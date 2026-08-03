@@ -1,8 +1,7 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { StorageFile } from "../storage/file-store.js";
 import { pruneCrawlHistory, type CrawlRetentionPolicy } from "../storage/retention.js";
 import {
-  CRAWL_FINGERPRINT_VERSION,
   normalizeCrawlUrl,
   type CrawlAggregate,
   type CrawlIssue,
@@ -12,6 +11,7 @@ import {
   type StorageData,
 } from "../storage/schema.js";
 import type { CrawledPage, CrawlResult } from "./types.js";
+import { createCrawlIssueFingerprint } from "./issue-fingerprint.js";
 
 export const DEFAULT_QUERY_PARAMETER_DENYLIST = [
   "access_token",
@@ -57,16 +57,44 @@ function issueCategory(code: string): CrawlIssue["category"] {
 }
 
 function issueSeverity(code: string): CrawlIssue["severity"] {
-  if (code === "FETCH_ERROR" || code === "HTTP_ERROR") return "error";
-  if (code === "REDIRECT_CHAIN" || code === "CANONICAL_MISMATCH" || code === "NOINDEX")
+  if (code === "FETCH_ERROR" || code === "HTTP_ERROR" || code === "BROKEN_INTERNAL_LINK")
+    return "error";
+  if (
+    code === "REDIRECT_CHAIN" ||
+    code === "CANONICAL_MISMATCH" ||
+    code === "NOINDEX" ||
+    code === "ORPHAN_PAGE"
+  )
     return "warning";
   return "info";
 }
 
-function issueFingerprint(pageUrl: string | null, code: string): string {
-  return createHash("sha256")
-    .update(`${CRAWL_FINGERPRINT_VERSION}\0${pageUrl ?? "target"}\0${code}`)
-    .digest("hex");
+function issueRecord(
+  runId: string,
+  targetUrl: string,
+  pageUrl: string | null,
+  code: string,
+  details: Record<string, unknown> = {},
+  relatedUrl?: string,
+): CrawlIssue {
+  const category = issueCategory(code);
+  return {
+    id: randomUUID(),
+    runId,
+    pageUrl,
+    code,
+    category,
+    severity: issueSeverity(code),
+    ...createCrawlIssueFingerprint({
+      targetUrl,
+      pageUrl,
+      code,
+      category,
+      ...(relatedUrl ? { relatedUrl } : {}),
+      details,
+    }),
+    details,
+  };
 }
 
 function pageRecord(runId: string, page: CrawledPage, denylist: ReadonlySet<string>): CrawlPage {
@@ -102,26 +130,40 @@ function buildSnapshot(
   aggregate: CrawlAggregate;
 } {
   const denylist = new Set(denylistValues.map((key) => key.trim().toLowerCase()).filter(Boolean));
+  const targetUrl = sanitizeUrl(result.startUrl, denylist);
   const pages = result.pages.map((page) => pageRecord(result.runId, page, denylist));
   const statusByUrl = new Map<string, number>();
   for (const page of pages) {
     statusByUrl.set(page.url, page.status);
     statusByUrl.set(page.finalUrl, page.status);
   }
-  const issues = result.pages.flatMap((page) => {
+  const pageIssues = result.pages.flatMap((page) => {
     const pageUrl = sanitizeUrl(page.finalUrl, denylist);
-    return page.issues.map((code): CrawlIssue => ({
-      id: randomUUID(),
-      runId: result.runId,
-      pageUrl,
-      code,
-      category: issueCategory(code),
-      severity: issueSeverity(code),
-      fingerprint: issueFingerprint(pageUrl, code),
-      fingerprintVersion: CRAWL_FINGERPRINT_VERSION,
-      details: {},
-    }));
+    return page.issues.map((code) => issueRecord(result.runId, targetUrl, pageUrl, code));
   });
+  const derivedLinkIssues = [
+    ...result.linkAnalysis.orphanPages.map((url) => {
+      const pageUrl = sanitizeUrl(url, denylist);
+      return issueRecord(result.runId, targetUrl, pageUrl, "ORPHAN_PAGE");
+    }),
+    ...result.linkAnalysis.brokenInternalLinks.map((link) => {
+      const pageUrl = sanitizeUrl(link.source, denylist);
+      const relatedUrl = sanitizeUrl(link.target, denylist);
+      return issueRecord(
+        result.runId,
+        targetUrl,
+        pageUrl,
+        "BROKEN_INTERNAL_LINK",
+        { relatedUrl, targetStatus: link.status },
+        relatedUrl,
+      );
+    }),
+  ];
+  const issues = [
+    ...new Map(
+      [...pageIssues, ...derivedLinkIssues].map((issue) => [issue.fingerprint, issue]),
+    ).values(),
+  ];
   const linkKeys = new Set<string>();
   const links: CrawlLink[] = [];
   for (const page of result.pages) {
@@ -150,15 +192,17 @@ function buildSnapshot(
     const key = String(page.status);
     statusCounts[key] = (statusCounts[key] ?? 0) + 1;
   }
+  const issueCounts: Record<string, number> = {};
+  for (const issue of issues) issueCounts[issue.code] = (issueCounts[issue.code] ?? 0) + 1;
   return {
     run: {
       id: result.runId,
-      target: sanitizeUrl(result.startUrl, denylist),
+      target: targetUrl,
       startedAt: result.startedAt,
       finishedAt: result.finishedAt,
       status: result.status,
       parameters: {
-        startUrl: sanitizeUrl(result.startUrl, denylist),
+        startUrl: targetUrl,
         ...result.limits,
       },
       ...(result.status === "partial"
@@ -168,7 +212,7 @@ function buildSnapshot(
     pages,
     issues,
     links,
-    aggregate: { runId: result.runId, ...result.summary, statusCounts },
+    aggregate: { runId: result.runId, ...result.summary, statusCounts, issueCounts },
   };
 }
 

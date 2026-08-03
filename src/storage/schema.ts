@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const CURRENT_STORAGE_VERSION = 2 as const;
-export const CRAWL_FINGERPRINT_VERSION = 1 as const;
+export const CRAWL_FINGERPRINT_VERSION = 2 as const;
 
 const isoTimestamp = z.string().datetime({ offset: true });
 const normalizedUrl = z.url().refine((value) => normalizeCrawlUrl(value) === value, {
@@ -87,7 +87,7 @@ export const crawlIssueSchema = z
     category: z.enum(["redirect", "canonical", "metadata", "indexing", "link", "crawl"]),
     severity: z.enum(["info", "warning", "error", "critical"]),
     fingerprint: z.string().min(1),
-    fingerprintVersion: z.literal(CRAWL_FINGERPRINT_VERSION),
+    fingerprintVersion: z.number().int().min(1).max(CRAWL_FINGERPRINT_VERSION),
     details: z.record(z.string(), z.unknown()).default({}),
   })
   .strict();

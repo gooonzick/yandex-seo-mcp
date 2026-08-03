@@ -33,8 +33,8 @@ migration and a fixture test.
   status and the exact crawl parameters used for the run.
 - `page` stores normalized requested/final URLs, response facts, indexability,
   canonical and bounded metadata required for comparisons.
-- `issue` points to a run and optional page, and reserves a versioned stable
-  fingerprint. The fingerprint algorithm itself belongs to `CRWL-004`.
+- `issue` points to a run and optional page and stores a versioned stable
+  fingerprint.
 - `link` is a directed edge with source, target, internal/external kind, follow
   state and observed target status.
 - `aggregate` stores deterministic counters for compact list responses.
@@ -56,6 +56,23 @@ records in one atomic file replacement. A repeated save of the same `runId` does
 not add or replace records and returns `created: false`. Monitoring and crawl
 writes share a path-level serialization lock, so both collections are preserved
 when operations overlap.
+
+## Issue identity
+
+New issues use fingerprint algorithm `v2`. Its SHA-256 input contains the
+algorithm version, category, normalized uppercase code and normalized page URL
+(or target URL for target-wide issues). Link issues additionally include the
+normalized related URL so two broken links from one page remain distinct.
+
+Human-readable messages, severity, HTTP status, metadata values and other
+observed details do not participate in identity. Consequently an issue remains
+stable while its evidence changes. Stored `fingerprintVersion` values from `v1`
+through the current version remain schema-valid, allowing future comparison code
+to select the correct compatibility behavior.
+
+Snapshot persistence derives `ORPHAN_PAGE` and `BROKEN_INTERNAL_LINK` issues from
+link analysis. Their sanitized related URL and observed target status remain in
+traceable details, while only the related URL contributes to link identity.
 
 ## URL identity
 

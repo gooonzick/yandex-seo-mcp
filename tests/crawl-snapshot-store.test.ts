@@ -58,10 +58,16 @@ const result: CrawlResult = {
     issueCounts: { SHORT_TITLE: 1 },
   },
   linkAnalysis: {
-    orphanPages: [],
+    orphanPages: ["https://example.com/?page=1&token=orphan-secret"],
     deepestPages: [],
     lowInternalLinkPages: [],
-    brokenInternalLinks: [],
+    brokenInternalLinks: [
+      {
+        source: "https://example.com/?page=1&session=source-secret",
+        target: "https://example.com/next?sort=asc&api_key=broken-secret",
+        status: 404,
+      },
+    ],
   },
   duplicateGroups: { titles: [], descriptions: [] },
 };
@@ -80,8 +86,14 @@ describe("CrawlSnapshotStore", () => {
       crawl: {
         runs: Array<{ target: string; status: string; failureCode?: string }>;
         pages: Array<{ url: string; canonical: string }>;
-        issues: unknown[];
+        issues: Array<{
+          code: string;
+          fingerprint: string;
+          fingerprintVersion: number;
+          details: Record<string, unknown>;
+        }>;
         links: Array<{ targetUrl: string }>;
+        aggregates: Array<{ issueCounts: Record<string, number> }>;
       };
     };
     expect(data.crawl.runs).toHaveLength(1);
@@ -94,13 +106,26 @@ describe("CrawlSnapshotStore", () => {
       url: "https://example.com/?page=1",
       canonical: "https://example.com/?page=1",
     });
-    expect(data.crawl.issues).toHaveLength(1);
+    expect(data.crawl.issues.map(({ code }) => code)).toEqual([
+      "SHORT_TITLE",
+      "ORPHAN_PAGE",
+      "BROKEN_INTERNAL_LINK",
+    ]);
+    expect(new Set(data.crawl.issues.map(({ fingerprint }) => fingerprint)).size).toBe(3);
+    expect(data.crawl.issues.every(({ fingerprintVersion }) => fingerprintVersion === 2)).toBe(
+      true,
+    );
+    expect(data.crawl.aggregates[0]?.issueCounts).toEqual({
+      SHORT_TITLE: 1,
+      ORPHAN_PAGE: 1,
+      BROKEN_INTERNAL_LINK: 1,
+    });
     expect(data.crawl.links.map(({ targetUrl }) => targetUrl)).toEqual([
       "https://example.com/next?sort=asc",
       "https://external.example/path?ref=site",
     ]);
     expect(raw).not.toMatch(
-      /run-secret|page-secret|session-secret|auth-secret|key-secret|password-secret/,
+      /run-secret|page-secret|session-secret|auth-secret|key-secret|password-secret|orphan-secret|source-secret|broken-secret/,
     );
     expect(raw).not.toContain("must-not-be-persisted");
   });

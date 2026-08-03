@@ -19,6 +19,8 @@
   миграция legacy monitoring `v1`, URL normalization и age/count retention policy.
 - Идемпотентная запись crawl snapshots через `crawler_save_snapshot`: atomic write,
   partial-run markers, query denylist, dry-run/confirmation и storage telemetry.
+- Стабильный crawl issue fingerprint `v2` для redirect, canonical, metadata,
+  indexing и link issues с backward-compatible чтением fingerprint `v1`.
 - MCP resources и prompts для типовых SEO workflow.
 - GET cache, bounded concurrency, HTTP rate limiting, telemetry и readiness endpoint.
 - Multi-user OAuth Authorization Code + PKCE, encrypted profile storage и изолированные bearer sessions.

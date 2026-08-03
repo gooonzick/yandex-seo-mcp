@@ -85,6 +85,7 @@ query-параметры; response body и тексты fetch errors не сох
 
 ### CRWL-004 — Ввести стабильный fingerprint проблемы
 
+- Статус: `completed` (2026-08-03)
 - Размер: `M`
 - Зависимости: CRWL-001
 - Критерии приемки:
@@ -92,6 +93,12 @@ query-параметры; response body и тексты fetch errors не сох
   - тексты и изменчивые значения не ломают идентичность;
   - версия алгоритма сохраняется вместе с issue;
   - тестами покрыты redirect, canonical, metadata, indexing и link issues.
+
+Реализация: fingerprint `v2` строится из нормализованного URL scope, category и
+issue code; для link issues дополнительно учитывается related URL. Тексты, severity,
+HTTP status и другие изменчивые details не входят в identity. Snapshot persistence
+добавляет отдельные `ORPHAN_PAGE` и `BROKEN_INTERNAL_LINK`, а schema продолжает
+читать ранее записанные fingerprint `v1`.
 
 ### CRWL-005 — Реализовать сравнение двух обходов
 

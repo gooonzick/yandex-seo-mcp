@@ -236,6 +236,10 @@ response body or fetch-error text. URL credentials, fragments and keys from
 per-target count limits are controlled by `CRAWLER_SNAPSHOT_RETENTION_DAYS` and
 `CRAWLER_SNAPSHOT_MAX_RUNS`.
 
+Persisted issues use a versioned stable fingerprint based on normalized URL,
+category and issue code. Volatile evidence does not change identity; link issues
+also include the related URL so separate broken links are not deduplicated.
+
 The versioned crawl-history storage model and migration contract are documented
 in [`docs/architecture/crawl-snapshot-storage.md`](docs/architecture/crawl-snapshot-storage.md).
 
