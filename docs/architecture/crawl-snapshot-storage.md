@@ -5,13 +5,14 @@ implemented by `CRWL-001` through `CRWL-007` on 2026-08-03.
 
 ## Container and migrations
 
-The local snapshot file is a versioned JSON container. Schema `v2` keeps legacy
-monitoring snapshots and crawl history together:
+The local snapshot file is a versioned JSON container. Schema `v3` keeps legacy
+monitoring snapshots, crawl history and the SEO change journal together:
 
 ```text
 StorageData
-├── version: 2
+├── version: 3
 ├── monitoringSnapshots[]
+├── seoChanges[]
 └── crawl
     ├── runs[]
     ├── pages[]
@@ -20,12 +21,12 @@ StorageData
     └── aggregates[]
 ```
 
-`migrateStorage` is the only read entry point. It validates `v2`, migrates the
-legacy `{ version: 1, snapshots: [...] }` format in memory, and rejects unknown
-versions instead of silently discarding data. The shared `StorageFile` writes
-migrated data atomically with file mode `0600`, preserving both monitoring and
-crawl collections. Future schema changes must add an explicit sequential
-migration and a fixture test.
+`migrateStorage` is the only read entry point. It validates `v3`, migrates the
+legacy `{ version: 1, snapshots: [...] }` format through `v2` and then `v3` in
+memory, and rejects unknown versions instead of silently discarding data. The
+shared `StorageFile` writes migrated data atomically with file mode `0600`,
+preserving monitoring, crawl and change-journal collections. Future schema
+changes must add an explicit sequential migration and a fixture test.
 
 Before replacing an existing valid primary file, `StorageFile` atomically stores
 its previous generation at `<storage-path>.bak`. Corrupted or unsupported input

@@ -6,6 +6,8 @@ import { CrawlSnapshotStore } from "./crawler/snapshot-store.js";
 import { registerCrawlerTools } from "./crawler/tools.js";
 import type { HostResolver } from "./crawler/types.js";
 import { registerQueryIntelligenceTools } from "./intelligence/tools.js";
+import { SeoChangeStore } from "./impact/change-store.js";
+import { registerSeoImpactTools } from "./impact/tools.js";
 import { MetricaClient } from "./metrica/client.js";
 import { registerMetricaTools } from "./metrica/tools.js";
 import { registerMcpContent } from "./mcp/content.js";
@@ -30,6 +32,7 @@ export interface YandexSeoServer {
   monitoring: MonitoringStore;
   crawler: SeoCrawler;
   crawlSnapshots: CrawlSnapshotStore;
+  seoChanges: SeoChangeStore;
 }
 
 export function createServer(dependencies: ServerDependencies): YandexSeoServer {
@@ -73,6 +76,10 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
       maxAgeDays: config.crawlerSnapshotRetentionDays ?? 90,
       maxRunsPerTarget: config.crawlerSnapshotMaxRuns ?? 100,
     },
+    config.crawlerSnapshotQueryDenylist,
+  );
+  const seoChanges = new SeoChangeStore(
+    config.monitorStoragePath ?? ".yandex-seo-monitor.json",
     config.crawlerSnapshotQueryDenylist,
   );
 
@@ -170,7 +177,8 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
   registerMonitoringTools(server, monitoring, metrica, webmaster, config);
   registerMcpContent(server, metrica, webmaster, monitoring, config);
   registerCrawlerTools(server, crawler, crawlSnapshots, webmaster, config);
+  registerSeoImpactTools(server, seoChanges, crawlSnapshots, config);
   registerQueryIntelligenceTools(server, webmaster, crawler, config);
 
-  return { server, metrica, webmaster, monitoring, crawler, crawlSnapshots };
+  return { server, metrica, webmaster, monitoring, crawler, crawlSnapshots, seoChanges };
 }

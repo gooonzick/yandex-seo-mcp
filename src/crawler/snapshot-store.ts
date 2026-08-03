@@ -7,6 +7,7 @@ import {
   type CrawlRetentionPolicy,
 } from "../storage/retention.js";
 import { YandexApiError } from "../shared/errors.js";
+import { DEFAULT_SECRET_QUERY_KEYS, sanitizeStoredUrl } from "../shared/stored-url.js";
 import {
   createPaginationScope,
   mapCursorPage,
@@ -14,12 +15,13 @@ import {
   type CursorPage,
 } from "../shared/pagination.js";
 import {
-  normalizeCrawlUrl,
   type CrawlAggregate,
   type CrawlIssue,
   type CrawlLink,
   type CrawlPage,
   type CrawlRun,
+  type SeoChange,
+  type SeoChangeType,
   type StorageData,
 } from "../storage/schema.js";
 import type { CrawledPage, CrawlResult } from "./types.js";
@@ -31,22 +33,7 @@ import {
   type CrawlRegressionReport,
 } from "./regression-detector.js";
 
-export const DEFAULT_QUERY_PARAMETER_DENYLIST = [
-  "access_token",
-  "api_key",
-  "apikey",
-  "auth",
-  "authorization",
-  "code",
-  "credential",
-  "key",
-  "password",
-  "secret",
-  "session",
-  "sessionid",
-  "sid",
-  "token",
-] as const;
+export const DEFAULT_QUERY_PARAMETER_DENYLIST = DEFAULT_SECRET_QUERY_KEYS;
 
 export interface SaveSnapshotResult {
   runId: string;
@@ -84,15 +71,27 @@ export interface ListCrawlSnapshotsOptions {
   limit: number;
 }
 
+export interface SeoChangeCrawlImpact {
+  status: "compared" | "insufficient_data";
+  change: Pick<SeoChange, "id" | "target" | "timestamp" | "type" | "urlScope">;
+  crawlPair: {
+    before: { runId: string; capturedAt: string } | null;
+    after: { runId: string; capturedAt: string } | null;
+  };
+  missing?: Array<"crawl_before_change" | "crawl_after_change">;
+  relevance?: {
+    scope: "target" | "explicit_urls";
+    pageFields: string[];
+    issueCategories: CrawlIssue["category"][];
+  };
+  comparison?: CrawlSnapshotComparison;
+}
+
 export type CrawlSnapshotSection = "pages" | "issues" | "links";
 export type CrawlSnapshotSectionRecord = CrawlPage | CrawlIssue | CrawlLink;
 
 function sanitizeUrl(value: string, denylist: ReadonlySet<string>): string {
-  const url = new URL(value);
-  for (const key of [...url.searchParams.keys()]) {
-    if (denylist.has(key.toLowerCase())) url.searchParams.delete(key);
-  }
-  return normalizeCrawlUrl(url.href);
+  return sanitizeStoredUrl(value, [...denylist]);
 }
 
 function normalizeDateFilter(value: string | undefined, name: string): string | undefined {
@@ -101,6 +100,39 @@ function normalizeDateFilter(value: string | undefined, name: string): string | 
   if (Number.isNaN(timestamp))
     throw new YandexApiError("VALIDATION", `${name} must be an ISO date`);
   return new Date(timestamp).toISOString();
+}
+
+const CHANGE_RELEVANCE: Record<
+  SeoChangeType,
+  { pageFields: string[]; issueCategories: CrawlIssue["category"][] }
+> = {
+  deploy: {
+    pageFields: ["status", "indexable", "canonical", "title", "description", "headings", "links"],
+    issueCategories: ["redirect", "canonical", "metadata", "indexing", "link", "crawl"],
+  },
+  content: {
+    pageFields: ["title", "description", "headings"],
+    issueCategories: ["metadata"],
+  },
+  metadata: {
+    pageFields: ["indexable", "canonical", "title", "description", "headings"],
+    issueCategories: ["canonical", "metadata", "indexing"],
+  },
+  redirect: {
+    pageFields: ["status", "canonical"],
+    issueCategories: ["redirect", "canonical", "crawl"],
+  },
+  internal_links: { pageFields: ["links"], issueCategories: ["link"] },
+  robots: { pageFields: ["indexable"], issueCategories: ["indexing", "crawl"] },
+  sitemap: { pageFields: ["status", "indexable"], issueCategories: ["indexing", "crawl"] },
+  manual: {
+    pageFields: ["status", "indexable", "canonical", "title", "description", "headings", "links"],
+    issueCategories: ["redirect", "canonical", "metadata", "indexing", "link", "crawl"],
+  },
+};
+
+function capturedAt(run: CrawlRun): string {
+  return run.finishedAt ?? run.startedAt;
 }
 
 function issueCategory(code: string): CrawlIssue["category"] {
@@ -389,6 +421,60 @@ export class CrawlSnapshotStore {
     if (beforeRun.target !== afterRun.target)
       throw new YandexApiError("VALIDATION", "Crawl snapshots must have the same target");
     return compareCrawlSnapshots(data, beforeRun, afterRun, exampleLimit);
+  }
+
+  public async compareForChange(
+    change: SeoChange,
+    exampleLimit: number,
+  ): Promise<SeoChangeCrawlImpact> {
+    const data = pruneCrawlHistory(await this.storage.read(), this.retention);
+    const eligible = data.crawl.runs.filter(
+      (run) =>
+        run.target === change.target &&
+        (run.status === "completed" || run.status === "partial") &&
+        run.finishedAt !== null,
+    );
+    const beforeRun = eligible
+      .filter((run) => capturedAt(run) < change.timestamp)
+      .sort((left, right) => capturedAt(right).localeCompare(capturedAt(left)))[0];
+    const afterRun = eligible
+      .filter((run) => capturedAt(run) > change.timestamp)
+      .sort((left, right) => capturedAt(left).localeCompare(capturedAt(right)))[0];
+    const changeSummary = {
+      id: change.id,
+      target: change.target,
+      timestamp: change.timestamp,
+      type: change.type,
+      urlScope: change.urlScope,
+    };
+    const crawlPair = {
+      before: beforeRun ? { runId: beforeRun.id, capturedAt: capturedAt(beforeRun) } : null,
+      after: afterRun ? { runId: afterRun.id, capturedAt: capturedAt(afterRun) } : null,
+    };
+    if (!beforeRun || !afterRun) {
+      const missing: SeoChangeCrawlImpact["missing"] = [];
+      if (!beforeRun) missing.push("crawl_before_change");
+      if (!afterRun) missing.push("crawl_after_change");
+      return { status: "insufficient_data", change: changeSummary, crawlPair, missing };
+    }
+    const relevance = CHANGE_RELEVANCE[change.type];
+    const comparison = compareCrawlSnapshots(data, beforeRun, afterRun, exampleLimit, {
+      ...(change.urlScope.length > 0 ? { urls: new Set(change.urlScope) } : {}),
+      pageFields: new Set(relevance.pageFields),
+      issueCategories: new Set(relevance.issueCategories),
+      changesOnly: true,
+    });
+    return {
+      status: "compared",
+      change: changeSummary,
+      crawlPair,
+      relevance: {
+        scope: change.urlScope.length > 0 ? "explicit_urls" : "target",
+        pageFields: relevance.pageFields,
+        issueCategories: relevance.issueCategories,
+      },
+      comparison,
+    };
   }
 
   public async detectRegressions(

@@ -276,6 +276,9 @@ describe("Yandex SEO MCP server", () => {
     expect(names).toContain("crawler_compare_snapshots");
     expect(names).toContain("crawler_detect_regressions");
     expect(names).toContain("crawler_cleanup_history");
+    expect(names).toContain("seo_record_change");
+    expect(names).toContain("seo_list_changes");
+    expect(names).toContain("seo_compare_change_crawl");
     expect(names).toContain("crawler_reconcile_yandex_index");
     expect(names).toContain("crawler_analyze_internal_links");
     expect(names).toContain("query_intelligence_cluster_queries");
@@ -468,6 +471,51 @@ describe("Yandex SEO MCP server", () => {
       writeToolsEnabled: true,
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("records and lists SEO changes idempotently", async () => {
+    const arguments_ = {
+      target: "https://example.com/",
+      timestamp: "2026-08-03T10:00:00.000Z",
+      type: "metadata",
+      urlScope: ["https://example.com/catalog"],
+      description: "Updated catalog metadata",
+      externalReference: "deploy:metadata-1",
+      confirm: true,
+    };
+    const created = await client.callTool({ name: "seo_record_change", arguments: arguments_ });
+    const repeated = await client.callTool({ name: "seo_record_change", arguments: arguments_ });
+    expect(created.isError).not.toBe(true);
+    expect(created.structuredContent).toMatchObject({
+      created: true,
+      change: { type: "metadata" },
+    });
+    expect(repeated.structuredContent).toMatchObject({ created: false });
+
+    const changeId = (created.structuredContent as { change: { id: string } }).change.id;
+    const crawlImpact = await client.callTool({
+      name: "seo_compare_change_crawl",
+      arguments: { changeId },
+    });
+    expect(crawlImpact.isError).not.toBe(true);
+    expect(crawlImpact.structuredContent).toMatchObject({
+      status: "insufficient_data",
+      missing: ["crawl_before_change", "crawl_after_change"],
+    });
+
+    const listed = await client.callTool({
+      name: "seo_list_changes",
+      arguments: { target: "https://example.com/", type: "metadata", limit: 10 },
+    });
+    expect(listed.structuredContent).toMatchObject({
+      changes: [{ externalReference: "deploy:metadata-1" }],
+      pageInfo: { hasMore: false },
+    });
+    const unconfirmed = await client.callTool({
+      name: "seo_record_change",
+      arguments: { ...arguments_, confirm: false },
+    });
+    expect(unconfirmed.isError).toBe(true);
   });
 
   it("calls a Metrica report with normalized query arguments", async () => {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const CURRENT_STORAGE_VERSION = 2 as const;
+export const CURRENT_STORAGE_VERSION = 3 as const;
 export const CRAWL_FINGERPRINT_VERSION = 2 as const;
 
 const isoTimestamp = z.string().datetime({ offset: true });
@@ -37,6 +37,29 @@ export const monitoringSnapshotSchema = z
   .strict();
 
 export type MonitoringSnapshot = z.infer<typeof monitoringSnapshotSchema>;
+
+export const seoChangeTypeSchema = z.enum([
+  "deploy",
+  "content",
+  "metadata",
+  "redirect",
+  "internal_links",
+  "robots",
+  "sitemap",
+  "manual",
+]);
+
+export const seoChangeSchema = z
+  .object({
+    id: z.uuid(),
+    target: normalizedUrl,
+    timestamp: isoTimestamp,
+    type: seoChangeTypeSchema,
+    urlScope: z.array(normalizedUrl).max(500),
+    description: z.string().min(1).max(2_000),
+    externalReference: z.string().min(1).max(500),
+  })
+  .strict();
 
 export const crawlRunSchema = z
   .object({
@@ -120,6 +143,7 @@ export const storageSchema = z
   .object({
     version: z.literal(CURRENT_STORAGE_VERSION),
     monitoringSnapshots: z.array(monitoringSnapshotSchema),
+    seoChanges: z.array(seoChangeSchema),
     crawl: z
       .object({
         runs: z.array(crawlRunSchema),
@@ -133,6 +157,8 @@ export const storageSchema = z
   .strict();
 
 export type StorageData = z.infer<typeof storageSchema>;
+export type SeoChange = z.infer<typeof seoChangeSchema>;
+export type SeoChangeType = z.infer<typeof seoChangeTypeSchema>;
 export type CrawlRun = z.infer<typeof crawlRunSchema>;
 export type CrawlPage = z.infer<typeof crawlPageSchema>;
 export type CrawlIssue = z.infer<typeof crawlIssueSchema>;
@@ -143,6 +169,7 @@ export function emptyStorage(): StorageData {
   return {
     version: CURRENT_STORAGE_VERSION,
     monitoringSnapshots: [],
+    seoChanges: [],
     crawl: { runs: [], pages: [], issues: [], links: [], aggregates: [] },
   };
 }

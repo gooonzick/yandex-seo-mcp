@@ -19,6 +19,7 @@ export interface CrawlIssueDiff {
   fingerprint: string;
   fingerprintVersion: number;
   code: string;
+  category: CrawlIssue["category"];
   pageUrl: string | null;
   state: CrawlDiffState;
   severity: { before: CrawlIssue["severity"] | null; after: CrawlIssue["severity"] | null };
@@ -34,6 +35,13 @@ export interface CrawlSnapshotComparison {
     pageFieldChanges: Record<string, number>;
   };
   examples: { limit: number; pages: CrawlPageDiff[]; issues: CrawlIssueDiff[] };
+}
+
+export interface CrawlSnapshotComparisonFilter {
+  urls?: ReadonlySet<string>;
+  pageFields?: ReadonlySet<string>;
+  issueCategories?: ReadonlySet<CrawlIssue["category"]>;
+  changesOnly?: boolean;
 }
 
 const states: readonly CrawlDiffState[] = ["new", "resolved", "worsened", "improved", "unchanged"];
@@ -185,6 +193,7 @@ function compareIssues(
       fingerprint: issue.fingerprint,
       fingerprintVersion: issue.fingerprintVersion,
       code: issue.code,
+      category: issue.category,
       pageUrl: issue.pageUrl,
       state,
       severity: { before: before?.severity ?? null, after: after?.severity ?? null },
@@ -217,9 +226,29 @@ export function compareCrawlSnapshots(
   beforeRun: CrawlRun,
   afterRun: CrawlRun,
   exampleLimit: number,
+  filter?: CrawlSnapshotComparisonFilter,
 ): CrawlSnapshotComparison {
-  const pages = comparePages(data, beforeRun, afterRun);
-  const issues = compareIssues(data, beforeRun, afterRun);
+  const pages = comparePages(data, beforeRun, afterRun)
+    .filter((page) => !filter?.urls || filter.urls.has(page.url))
+    .map((page) => ({
+      ...page,
+      changes: filter?.pageFields
+        ? page.changes.filter((change) => filter.pageFields!.has(change.field))
+        : page.changes,
+    }))
+    .filter(
+      (page) =>
+        !filter?.changesOnly ||
+        page.state === "new" ||
+        page.state === "resolved" ||
+        page.changes.length > 0,
+    );
+  const issues = compareIssues(data, beforeRun, afterRun).filter(
+    (issue) =>
+      (!filter?.urls || (issue.pageUrl !== null && filter.urls.has(issue.pageUrl))) &&
+      (!filter?.issueCategories || filter.issueCategories.has(issue.category)) &&
+      (!filter?.changesOnly || issue.state !== "unchanged"),
+  );
   const pageStates = stateCounts();
   const issueStates = stateCounts();
   const pageFieldChanges: Record<string, number> = {};

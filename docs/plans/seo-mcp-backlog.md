@@ -165,6 +165,7 @@ runs и возвращает объем удаления с bounded sample run I
 
 ### IMP-001 — Создать журнал SEO-изменений
 
+- Статус: `completed` (2026-08-03)
 - Размер: `M`
 - Зависимости: CRWL-001
 - Tools: `seo_record_change`, `seo_list_changes`
@@ -174,14 +175,30 @@ runs и возвращает объем удаления с bounded sample run I
   - запись идемпотентна по external reference;
   - никаких произвольных секретных payload.
 
+Реализация: storage schema `v3` добавляет строгую bounded-коллекцию `seoChanges`
+и последовательную миграцию `v2 → v3`. `seo_record_change` атомарно записывает
+подтвержденное изменение и дедуплицирует его по normalized target + external
+reference; конфликтующий reuse reference отклоняется. `seo_list_changes`
+поддерживает фильтры target/type/date и cursor pagination. URL scope ограничен
+500 same-origin URL, секретные query keys удаляются, arbitrary payload отсутствует.
+
 ### IMP-002 — Сопоставлять изменение с crawl diff
 
+- Статус: `completed` (2026-08-03)
 - Размер: `M`
 - Зависимости: IMP-001, CRWL-005
+- Tool: `seo_compare_change_crawl`
 - Критерии приемки:
   - определяется первый crawl до и после изменения;
   - показываются только релевантные URL и типы изменений;
   - отсутствие достаточных данных возвращается как `insufficient_data`, а не ошибка.
+
+Реализация: `seo_compare_change_crawl` по `changeId` выбирает ближайший
+завершенный или partial crawl строго до изменения и ближайший строго после него.
+Diff ограничивается `urlScope` (пустой scope означает весь target), а page fields
+и issue categories фильтруются по типу изменения. Ответ содержит bounded examples
+и выбранные run IDs; отсутствие любой стороны возвращает `insufficient_data` с
+явным списком `crawl_before_change`/`crawl_after_change` без tool error.
 
 ### IMP-003 — Оценивать влияние по Метрике
 

@@ -1,7 +1,11 @@
 import { z } from "zod";
 import {
   CURRENT_STORAGE_VERSION,
-  emptyStorage,
+  crawlAggregateSchema,
+  crawlIssueSchema,
+  crawlLinkSchema,
+  crawlPageSchema,
+  crawlRunSchema,
   monitoringSnapshotSchema,
   storageSchema,
   type StorageData,
@@ -14,17 +18,41 @@ const legacyStorageSchema = z
   })
   .passthrough();
 
+const storageV2Schema = z
+  .object({
+    version: z.literal(2),
+    monitoringSnapshots: z.array(monitoringSnapshotSchema),
+    crawl: z
+      .object({
+        runs: z.array(crawlRunSchema),
+        pages: z.array(crawlPageSchema),
+        issues: z.array(crawlIssueSchema),
+        links: z.array(crawlLinkSchema),
+        aggregates: z.array(crawlAggregateSchema),
+      })
+      .strict(),
+  })
+  .strict();
+
 type Migration = (input: unknown) => unknown;
 
-const migrations: ReadonlyMap<number, Migration> = new Map([
+const migrations: ReadonlyMap<number, Migration> = new Map<number, Migration>([
   [
     1,
     (input) => {
       const legacy = legacyStorageSchema.parse(input);
       return {
-        ...emptyStorage(),
+        version: 2,
         monitoringSnapshots: legacy.snapshots,
+        crawl: { runs: [], pages: [], issues: [], links: [], aggregates: [] },
       };
+    },
+  ],
+  [
+    2,
+    (input) => {
+      const legacy = storageV2Schema.parse(input);
+      return { ...legacy, version: CURRENT_STORAGE_VERSION, seoChanges: [] };
     },
   ],
 ]);

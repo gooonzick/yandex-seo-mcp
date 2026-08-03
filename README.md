@@ -19,6 +19,8 @@ recrawling, and the Metrica Logs API.
   type, acquisition sources, search engines, ecommerce, and segment comparison.
 - Persistent SEO snapshots, regression alerts, retention, and optional
   background monitoring.
+- Persistent SEO change journal with typed entries and external-reference
+  idempotency.
 - MCP resources for counters, sites, monitoring and telemetry, plus reusable
   report, incident-analysis and backlog prompts.
 - `stdio` transport for local MCP clients.
@@ -281,6 +283,24 @@ CRAWLER_REGRESSION_EXCLUSIONS_JSON=[{"target":"https://example.com/","types":["N
 
 The versioned crawl-history storage model and migration contract are documented
 in [`docs/architecture/crawl-snapshot-storage.md`](docs/architecture/crawl-snapshot-storage.md).
+
+### SEO change journal
+
+- `seo_record_change` records a confirmed `deploy`, `content`, `metadata`,
+  `redirect`, `internal_links`, `robots`, `sitemap` or `manual` change;
+- `seo_list_changes` lists entries by target, type and inclusive date range with
+  cursor pagination;
+- `seo_compare_change_crawl` compares the nearest saved crawl strictly before
+  and after a journal entry, scoped to relevant URLs, page fields and issue
+  categories. Missing before/after data returns `insufficient_data` rather than
+  a tool error.
+
+Each entry has a bounded description, external reference and up to 500
+same-origin scope URLs. An empty scope means the whole target. Repeating the same
+target/reference/content is idempotent; conflicting reuse of a reference is
+rejected. The journal accepts no arbitrary payload and removes configured secret
+query parameters from stored URLs. See the
+[journal contract](docs/architecture/seo-change-journal.md).
 The shared cursor contract is documented in
 [`docs/architecture/cursor-pagination.md`](docs/architecture/cursor-pagination.md).
 
