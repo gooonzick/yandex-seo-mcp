@@ -1,6 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AppConfig } from "../config.js";
+import { YandexApiError } from "../shared/errors.js";
+import { createPaginationInputSchema } from "../shared/pagination.js";
 import { handleTool, type ResultLimits } from "../shared/result.js";
 import { telemetry } from "../shared/telemetry.js";
 import type { WebmasterClient } from "../webmaster/client.js";
@@ -41,6 +43,23 @@ const crawlInputSchema = z.object({
   maxDepth: z.number().int().min(0).max(20).optional(),
   concurrency: z.number().int().min(1).max(16).optional(),
   delayMs: z.number().int().min(0).max(60_000).optional(),
+});
+
+const crawlSnapshotListSchema = createPaginationInputSchema(200, 50).extend({
+  target: z.url().optional(),
+  dateFrom: z.string().datetime({ offset: true }).optional(),
+  dateTo: z.string().datetime({ offset: true }).optional(),
+});
+
+const crawlSnapshotGetSchema = createPaginationInputSchema(200, 50).extend({
+  runId: z.uuid(),
+  section: z.enum(["summary", "pages", "issues", "links"]).default("summary"),
+});
+
+const crawlSnapshotCompareSchema = z.object({
+  beforeRunId: z.uuid(),
+  afterRunId: z.uuid(),
+  exampleLimit: z.number().int().min(1).max(200).default(50),
 });
 
 function extractUrls(value: unknown): string[] {
@@ -185,6 +204,80 @@ export function registerCrawlerTools(
           telemetry.event("crawler_snapshot_failure");
           throw error;
         }
+      }, resultLimits),
+  );
+
+  server.registerTool(
+    "crawler_list_snapshots",
+    {
+      title: "List saved crawl snapshots",
+      description:
+        "Return compact crawl run summaries filtered by normalized target and inclusive ISO date range, with cursor pagination.",
+      inputSchema: crawlSnapshotListSchema,
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    (input) =>
+      handleTool(async () => {
+        const page = await snapshotStore.list(input);
+        telemetry.event("crawler_snapshot_list");
+        return { snapshots: page.items, pageInfo: page.pageInfo };
+      }, resultLimits),
+  );
+
+  server.registerTool(
+    "crawler_get_snapshot",
+    {
+      title: "Get one saved crawl snapshot",
+      description:
+        "Return a compact snapshot summary by default, or one cursor-paginated pages, issues or links section.",
+      inputSchema: crawlSnapshotGetSchema,
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    (input) =>
+      handleTool(async () => {
+        if (input.section === "summary") {
+          if (input.cursor)
+            throw new YandexApiError("VALIDATION", "Summary section does not accept a cursor");
+          const snapshot = await snapshotStore.getSummary(input.runId);
+          if (!snapshot) throw new YandexApiError("NOT_FOUND", "Crawl snapshot was not found");
+          telemetry.event("crawler_snapshot_get_summary");
+          return { snapshot };
+        }
+        const page = await snapshotStore.getSection(
+          input.runId,
+          input.section,
+          input.cursor,
+          input.limit,
+        );
+        if (!page) throw new YandexApiError("NOT_FOUND", "Crawl snapshot was not found");
+        telemetry.event("crawler_snapshot_get_section");
+        return {
+          runId: input.runId,
+          section: input.section,
+          [input.section]: page.items,
+          pageInfo: page.pageInfo,
+        };
+      }, resultLimits),
+  );
+
+  server.registerTool(
+    "crawler_compare_snapshots",
+    {
+      title: "Compare two saved crawl snapshots",
+      description:
+        "Compare two snapshots of the same target, separating crawl configuration changes from page and stable-fingerprint issue lifecycle changes.",
+      inputSchema: crawlSnapshotCompareSchema,
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    (input) =>
+      handleTool(async () => {
+        const comparison = await snapshotStore.compare(
+          input.beforeRunId,
+          input.afterRunId,
+          input.exampleLimit,
+        );
+        telemetry.event("crawler_snapshot_compare");
+        return comparison;
       }, resultLimits),
   );
 

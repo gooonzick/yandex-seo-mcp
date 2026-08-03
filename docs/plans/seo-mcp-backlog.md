@@ -74,6 +74,7 @@ query-параметры; response body и тексты fetch errors не сох
 
 ### CRWL-003 — Добавить список и получение crawl snapshots
 
+- Статус: `completed` (2026-08-03)
 - Размер: `S`
 - Зависимости: CRWL-002
 - Tools: `crawler_list_snapshots`, `crawler_get_snapshot`
@@ -82,6 +83,11 @@ query-параметры; response body и тексты fetch errors не сох
   - cursor pagination;
   - компактный результат по умолчанию;
   - детальные данные доступны через отдельный resource/tool.
+
+Реализация: `crawler_list_snapshots` возвращает компактные run/aggregate/counts с
+фильтрами target и inclusive date range, stable cursor pagination и normalized
+target identity. `crawler_get_snapshot` по умолчанию возвращает summary, а pages,
+issues и links — отдельными bounded cursor-paginated секциями.
 
 ### CRWL-004 — Ввести стабильный fingerprint проблемы
 
@@ -102,6 +108,7 @@ HTTP status и другие изменчивые details не входят в id
 
 ### CRWL-005 — Реализовать сравнение двух обходов
 
+- Статус: `completed` (2026-08-03)
 - Размер: `L`
 - Зависимости: CRWL-003, CRWL-004
 - Tool: `crawler_compare_snapshots`
@@ -110,6 +117,12 @@ HTTP status и другие изменчивые details не входят в id
   - сравниваются URL, status, indexability, canonical, title, description, headings и links;
   - отделяются изменения конфигурации crawl от изменений сайта;
   - результат содержит summary и ограниченную выборку примеров.
+
+Реализация: `crawler_compare_snapshots` сравнивает два сохраненных run одного
+target. Page lifecycle и health state рассчитываются по нормализованному URL,
+issue lifecycle — по versioned fingerprint; crawl parameters вынесены в отдельный
+configuration diff. Summary считается по всей выборке, а детальные page/issue
+examples ограничиваются параметром `exampleLimit`.
 
 ### CRWL-006 — Выявлять технические регрессии
 

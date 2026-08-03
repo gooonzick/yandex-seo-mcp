@@ -1,7 +1,7 @@
 # Crawl snapshot storage
 
-Status: storage model and snapshot persistence implemented by `CRWL-001` and
-`CRWL-002` on 2026-08-03.
+Status: storage model, snapshot persistence/reads and snapshot comparison
+implemented by `CRWL-001` through `CRWL-005` on 2026-08-03.
 
 ## Container and migrations
 
@@ -62,6 +62,44 @@ records in one atomic file replacement. A repeated save of the same `runId` does
 not add or replace records and returns `created: false`. Monitoring and crawl
 writes share a path-level serialization lock, so both collections are preserved
 when operations overlap.
+
+## Snapshot reads
+
+`crawler_list_snapshots` is intentionally compact: each item contains the run,
+aggregate and page/issue/link counts, never the detailed arrays. It supports an
+exact normalized target filter and an inclusive `dateFrom`/`dateTo` range over
+`finishedAt` (falling back to `startedAt`). The target filter applies the same
+query denylist as persistence. Results use descending `timestamp + runId` keyset
+pagination.
+
+`crawler_get_snapshot` returns only run/aggregate/counts for its default `summary`
+section. Callers request `pages`, `issues` or `links` explicitly; every detailed
+section has its own ascending stable cursor and bounded limit. Unknown run IDs
+return normalized `NOT_FOUND`. This sectioned contract prevents an accidental
+full-history response from bypassing result limits.
+
+## Snapshot comparison
+
+`crawler_compare_snapshots` accepts explicit `beforeRunId` and `afterRunId` for
+the same normalized target. It rejects identical run IDs, missing snapshots and
+cross-target comparisons. The result separates crawl parameter changes from site
+changes so a different depth, concurrency or other crawl setting is visible but
+does not masquerade as a technical regression.
+
+Pages are matched by normalized requested URL. URL appearance/disappearance maps
+to `new`/`resolved`; retained pages are `worsened`, `improved` or `unchanged`
+according to a deterministic health penalty based on HTTP status, indexability,
+canonical drift, missing title/description/H1 and broken outgoing internal links.
+The field diff independently reports status, indexability, canonical, title,
+description, headings and sorted outgoing link-edge changes. Consequently a
+neutral metadata change can remain health-state `unchanged` while still appearing
+in `pageFieldChanges` and the detailed example.
+
+Issues are matched by `fingerprintVersion + fingerprint`. Appearance,
+disappearance and severity movement produce the same five lifecycle states.
+Summary counts cover every page and issue; only deterministic, change-first
+examples are returned, bounded by `exampleLimit` (default 50, maximum 200 per
+collection).
 
 ## Issue identity
 

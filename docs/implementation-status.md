@@ -25,6 +25,11 @@
   binding, normalized errors и `pageInfo`; применен в `monitor_list_snapshots`.
 - Atomic rolling storage backup, sequential forward migrations, fail-closed
   corruption handling и fixture-based rollback tests.
+- Compact filtered crawl snapshot history via `crawler_list_snapshots` and bounded
+  sectioned details via `crawler_get_snapshot`, both with cursor pagination.
+- Deterministic crawl snapshot comparison via `crawler_compare_snapshots`: page
+  health/field diff, stable-fingerprint issue lifecycle, isolated crawl parameter
+  changes and bounded examples.
 - MCP resources и prompts для типовых SEO workflow.
 - GET cache, bounded concurrency, HTTP rate limiting, telemetry и readiness endpoint.
 - Multi-user OAuth Authorization Code + PKCE, encrypted profile storage и изолированные bearer sessions.

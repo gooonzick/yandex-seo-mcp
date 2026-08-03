@@ -44,7 +44,9 @@ Timestamp collections use `timestamp + NUL + stable ID`, preventing collisions
 when records share a timestamp. New records inserted before the cursor do not
 shift or duplicate records on later pages; deleted records are naturally skipped.
 
-`monitor_list_snapshots` is the reference integration. It orders snapshots by
-`capturedAt + ID` descending and binds cursors to the optional target filter.
-Future crawl snapshots, actions, jobs and bounded API selections must use the
-same helpers and response metadata.
+`monitor_list_snapshots` orders monitoring snapshots by `capturedAt + ID`
+descending and binds cursors to the optional target filter.
+`crawler_list_snapshots` uses finished timestamp + run ID descending and binds
+target/date filters; detailed crawl sections use section-specific ascending keys.
+Future actions, jobs and bounded API selections must use the same helpers and
+response metadata.

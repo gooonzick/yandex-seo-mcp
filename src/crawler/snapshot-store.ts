@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { StorageFile } from "../storage/file-store.js";
 import { pruneCrawlHistory, type CrawlRetentionPolicy } from "../storage/retention.js";
+import { YandexApiError } from "../shared/errors.js";
+import {
+  createPaginationScope,
+  mapCursorPage,
+  paginateByKey,
+  type CursorPage,
+} from "../shared/pagination.js";
 import {
   normalizeCrawlUrl,
   type CrawlAggregate,
@@ -12,6 +19,7 @@ import {
 } from "../storage/schema.js";
 import type { CrawledPage, CrawlResult } from "./types.js";
 import { createCrawlIssueFingerprint } from "./issue-fingerprint.js";
+import { compareCrawlSnapshots, type CrawlSnapshotComparison } from "./snapshot-compare.js";
 
 export const DEFAULT_QUERY_PARAMETER_DENYLIST = [
   "access_token",
@@ -38,12 +46,37 @@ export interface SaveSnapshotResult {
   counts: { pages: number; issues: number; links: number };
 }
 
+export interface CrawlSnapshotSummary {
+  run: CrawlRun;
+  aggregate: CrawlAggregate | null;
+  counts: { pages: number; issues: number; links: number };
+}
+
+export interface ListCrawlSnapshotsOptions {
+  target?: string | undefined;
+  dateFrom?: string | undefined;
+  dateTo?: string | undefined;
+  cursor?: string | undefined;
+  limit: number;
+}
+
+export type CrawlSnapshotSection = "pages" | "issues" | "links";
+export type CrawlSnapshotSectionRecord = CrawlPage | CrawlIssue | CrawlLink;
+
 function sanitizeUrl(value: string, denylist: ReadonlySet<string>): string {
   const url = new URL(value);
   for (const key of [...url.searchParams.keys()]) {
     if (denylist.has(key.toLowerCase())) url.searchParams.delete(key);
   }
   return normalizeCrawlUrl(url.href);
+}
+
+function normalizeDateFilter(value: string | undefined, name: string): string | undefined {
+  if (!value) return undefined;
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp))
+    throw new YandexApiError("VALIDATION", `${name} must be an ISO date`);
+  return new Date(timestamp).toISOString();
 }
 
 function issueCategory(code: string): CrawlIssue["category"] {
@@ -256,5 +289,94 @@ export class CrawlSnapshotStore {
       return pruneCrawlHistory(data, this.retention);
     });
     return response(created);
+  }
+
+  public async list(options: ListCrawlSnapshotsOptions): Promise<CursorPage<CrawlSnapshotSummary>> {
+    const data = pruneCrawlHistory(await this.storage.read(), this.retention);
+    const denylist = new Set(
+      this.queryParameterDenylist.map((key) => key.trim().toLowerCase()).filter(Boolean),
+    );
+    const target = options.target ? sanitizeUrl(options.target, denylist) : undefined;
+    const dateFrom = normalizeDateFilter(options.dateFrom, "dateFrom");
+    const dateTo = normalizeDateFilter(options.dateTo, "dateTo");
+    if (dateFrom && dateTo && dateFrom > dateTo)
+      throw new YandexApiError("VALIDATION", "dateFrom must not be later than dateTo");
+    const runs = data.crawl.runs.filter((run) => {
+      const timestamp = run.finishedAt ?? run.startedAt;
+      return (
+        (!target || run.target === target) &&
+        (!dateFrom || timestamp >= dateFrom) &&
+        (!dateTo || timestamp <= dateTo)
+      );
+    });
+    return mapCursorPage(
+      paginateByKey(runs, {
+        scope: createPaginationScope("crawl-snapshots", { target, dateFrom, dateTo }),
+        cursor: options.cursor,
+        limit: options.limit,
+        order: "desc",
+        getKey: (run) => `${run.finishedAt ?? run.startedAt}\0${run.id}`,
+      }),
+      (run) => this.summary(data, run),
+    );
+  }
+
+  public async getSummary(runId: string): Promise<CrawlSnapshotSummary | undefined> {
+    const data = pruneCrawlHistory(await this.storage.read(), this.retention);
+    const run = data.crawl.runs.find((candidate) => candidate.id === runId);
+    return run ? this.summary(data, run) : undefined;
+  }
+
+  public async getSection(
+    runId: string,
+    section: CrawlSnapshotSection,
+    cursor: string | undefined,
+    limit: number,
+  ): Promise<CursorPage<CrawlSnapshotSectionRecord> | undefined> {
+    const data = pruneCrawlHistory(await this.storage.read(), this.retention);
+    if (!data.crawl.runs.some((run) => run.id === runId)) return undefined;
+    const records = data.crawl[section].filter((record) => record.runId === runId);
+    const getKey = (record: CrawlSnapshotSectionRecord): string => {
+      if ("url" in record) return `${record.url}\0${record.finalUrl}`;
+      if ("id" in record) return `${record.pageUrl ?? ""}\0${record.code}\0${record.id}`;
+      return `${record.sourceUrl}\0${record.targetUrl}\0${record.kind}`;
+    };
+    return paginateByKey(records, {
+      scope: createPaginationScope("crawl-snapshot-section", { runId, section }),
+      cursor,
+      limit,
+      order: "asc",
+      getKey,
+    });
+  }
+
+  public async compare(
+    beforeRunId: string,
+    afterRunId: string,
+    exampleLimit: number,
+  ): Promise<CrawlSnapshotComparison> {
+    if (beforeRunId === afterRunId)
+      throw new YandexApiError("VALIDATION", "beforeRunId and afterRunId must be different");
+    const data = pruneCrawlHistory(await this.storage.read(), this.retention);
+    const beforeRun = data.crawl.runs.find(({ id }) => id === beforeRunId);
+    const afterRun = data.crawl.runs.find(({ id }) => id === afterRunId);
+    if (!beforeRun || !afterRun)
+      throw new YandexApiError("NOT_FOUND", "One or both crawl snapshots were not found");
+    if (beforeRun.target !== afterRun.target)
+      throw new YandexApiError("VALIDATION", "Crawl snapshots must have the same target");
+    return compareCrawlSnapshots(data, beforeRun, afterRun, exampleLimit);
+  }
+
+  private summary(data: StorageData, run: CrawlRun): CrawlSnapshotSummary {
+    return {
+      run: structuredClone(run),
+      aggregate:
+        structuredClone(data.crawl.aggregates.find((record) => record.runId === run.id)) ?? null,
+      counts: {
+        pages: data.crawl.pages.filter((record) => record.runId === run.id).length,
+        issues: data.crawl.issues.filter((record) => record.runId === run.id).length,
+        links: data.crawl.links.filter((record) => record.runId === run.id).length,
+      },
+    };
   }
 }

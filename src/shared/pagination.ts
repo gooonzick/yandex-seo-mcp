@@ -23,6 +23,10 @@ export interface CursorPage<T> {
   };
 }
 
+export function mapCursorPage<T, U>(page: CursorPage<T>, mapper: (item: T) => U): CursorPage<U> {
+  return { items: page.items.map(mapper), pageInfo: page.pageInfo };
+}
+
 export function createPaginationInputSchema(maxLimit = 200, defaultLimit = 50) {
   return z.object({
     cursor: z.string().min(1).max(MAX_CURSOR_LENGTH).optional(),

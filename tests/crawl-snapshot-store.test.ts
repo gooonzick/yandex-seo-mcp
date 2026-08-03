@@ -129,4 +129,185 @@ describe("CrawlSnapshotStore", () => {
     );
     expect(raw).not.toContain("must-not-be-persisted");
   });
+
+  it("lists compact summaries and paginates detailed sections", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "yandex-seo-crawl-list-"));
+    const store = new CrawlSnapshotStore(join(directory, "snapshots.json"), {
+      maxAgeDays: 90,
+      maxRunsPerTarget: 100,
+    });
+    const newer: CrawlResult = {
+      ...structuredClone(result),
+      runId: "22222222-2222-4222-8222-222222222222",
+      startedAt: "2026-08-03T11:00:00.000Z",
+      finishedAt: "2026-08-03T11:01:00.000Z",
+    };
+    await store.save(result);
+    await store.save(newer);
+
+    const first = await store.list({
+      target: "https://example.com/?page=1&token=filter-secret",
+      dateFrom: "2026-08-03T09:00:00.000Z",
+      dateTo: "2026-08-03T12:00:00.000Z",
+      limit: 1,
+    });
+    expect(first.items).toMatchObject([
+      {
+        run: { id: newer.runId },
+        counts: { pages: 1, issues: 3, links: 2 },
+        aggregate: { crawled: 1 },
+      },
+    ]);
+    expect(first.pageInfo).toMatchObject({ hasMore: true });
+
+    const second = await store.list({
+      target: "https://example.com/?page=1",
+      dateFrom: "2026-08-03T09:00:00.000Z",
+      dateTo: "2026-08-03T12:00:00.000Z",
+      cursor: first.pageInfo.nextCursor ?? undefined,
+      limit: 1,
+    });
+    expect(second.items[0]?.run.id).toBe(result.runId);
+    expect(second.pageInfo).toMatchObject({ hasMore: false, nextCursor: null });
+
+    expect(await store.getSummary(result.runId)).toMatchObject({
+      run: { id: result.runId },
+      counts: { pages: 1, issues: 3, links: 2 },
+    });
+    const issues = await store.getSection(result.runId, "issues", undefined, 2);
+    expect(issues?.items).toHaveLength(2);
+    expect(issues?.pageInfo).toMatchObject({ hasMore: true });
+    const remainingIssues = await store.getSection(
+      result.runId,
+      "issues",
+      issues?.pageInfo.nextCursor ?? undefined,
+      2,
+    );
+    expect(remainingIssues?.items).toHaveLength(1);
+    expect(await store.getSummary("33333333-3333-4333-8333-333333333333")).toBeUndefined();
+    await expect(
+      store.list({
+        dateFrom: "2026-08-04T00:00:00.000Z",
+        dateTo: "2026-08-03T00:00:00.000Z",
+        limit: 10,
+      }),
+    ).rejects.toThrow(/dateFrom must not be later/);
+  });
+
+  it("compares site changes separately from crawl configuration", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "yandex-seo-crawl-compare-"));
+    const store = new CrawlSnapshotStore(join(directory, "snapshots.json"), {
+      maxAgeDays: 90,
+      maxRunsPerTarget: 100,
+    });
+    const page = result.pages[0]!;
+    const baseline: CrawlResult = {
+      ...structuredClone(result),
+      status: "completed",
+      partialReasons: [],
+      pages: [
+        { ...structuredClone(page), url: "https://example.com/", finalUrl: "https://example.com/" },
+        {
+          ...structuredClone(page),
+          url: "https://example.com/old",
+          finalUrl: "https://example.com/old",
+          issues: [],
+        },
+        {
+          ...structuredClone(page),
+          url: "https://example.com/recover",
+          finalUrl: "https://example.com/recover",
+          status: 500,
+          metadata: null,
+          issues: ["HTTP_500"],
+        },
+        {
+          ...structuredClone(page),
+          url: "https://example.com/stable",
+          finalUrl: "https://example.com/stable",
+        },
+      ],
+      linkAnalysis: {
+        orphanPages: [],
+        deepestPages: [],
+        lowInternalLinkPages: [],
+        brokenInternalLinks: [],
+      },
+    };
+    const current: CrawlResult = {
+      ...structuredClone(baseline),
+      runId: "22222222-2222-4222-8222-222222222222",
+      startedAt: "2026-08-03T11:00:00.000Z",
+      finishedAt: "2026-08-03T11:01:00.000Z",
+      limits: { ...baseline.limits, maxDepth: baseline.limits.maxDepth + 1 },
+      pages: [
+        {
+          ...structuredClone(baseline.pages[0]!),
+          status: 500,
+          metadata: null,
+        },
+        {
+          ...structuredClone(page),
+          url: "https://example.com/recover",
+          finalUrl: "https://example.com/recover",
+          issues: [],
+        },
+        {
+          ...structuredClone(baseline.pages[3]!),
+          metadata: {
+            ...structuredClone(baseline.pages[3]!.metadata!),
+            internalLinks: [
+              ...baseline.pages[3]!.metadata!.internalLinks,
+              "https://example.com/added-link",
+            ],
+          },
+        },
+        {
+          ...structuredClone(page),
+          url: "https://example.com/new",
+          finalUrl: "https://example.com/new",
+          issues: ["MISSING_TITLE"],
+        },
+      ],
+    };
+    await store.save(baseline);
+    await store.save(current);
+
+    const comparison = await store.compare(baseline.runId, current.runId, 3);
+
+    expect(comparison.configuration).toMatchObject({
+      changed: true,
+      changes: [{ field: "maxDepth", before: 2, after: 3 }],
+    });
+    expect(comparison.summary.pages).toEqual({
+      new: 1,
+      resolved: 1,
+      worsened: 1,
+      improved: 1,
+      unchanged: 1,
+    });
+    expect(comparison.summary.pageFieldChanges).toMatchObject({
+      status: 2,
+      indexable: 2,
+      canonical: 2,
+      title: 2,
+      description: 2,
+      headings: 2,
+      links: 3,
+    });
+    expect(comparison.summary.issues).toMatchObject({ new: 1, resolved: 1, unchanged: 2 });
+    expect(comparison.examples.pages).toHaveLength(3);
+    expect(comparison.examples.issues.length).toBeLessThanOrEqual(3);
+    expect(comparison.examples.pages.map(({ state }) => state)).toEqual([
+      "new",
+      "resolved",
+      "worsened",
+    ]);
+    await expect(store.compare(baseline.runId, baseline.runId, 10)).rejects.toThrow(
+      /must be different/,
+    );
+    await expect(
+      store.compare(baseline.runId, "33333333-3333-4333-8333-333333333333", 10),
+    ).rejects.toThrow(/not found/);
+  });
 });

@@ -270,6 +270,9 @@ describe("Yandex SEO MCP server", () => {
     expect(names).toContain("monitor_check_alerts");
     expect(names).toContain("crawler_audit_site");
     expect(names).toContain("crawler_save_snapshot");
+    expect(names).toContain("crawler_list_snapshots");
+    expect(names).toContain("crawler_get_snapshot");
+    expect(names).toContain("crawler_compare_snapshots");
     expect(names).toContain("crawler_reconcile_yandex_index");
     expect(names).toContain("crawler_analyze_internal_links");
     expect(names).toContain("query_intelligence_cluster_queries");
@@ -314,6 +317,40 @@ describe("Yandex SEO MCP server", () => {
     expect(saved.isError).not.toBe(true);
     expect(saved.structuredContent).toMatchObject({ runId, created: true, dryRun: false });
     expect(repeated.structuredContent).toMatchObject({ runId, created: false, dryRun: false });
+
+    const listed = await client.callTool({
+      name: "crawler_list_snapshots",
+      arguments: { target: "https://example.com/", limit: 1 },
+    });
+    expect(listed.isError).not.toBe(true);
+    expect(listed.structuredContent).toMatchObject({
+      snapshots: [{ run: { id: runId }, counts: { pages: 2 } }],
+      pageInfo: { hasMore: false, nextCursor: null },
+    });
+
+    const summary = await client.callTool({
+      name: "crawler_get_snapshot",
+      arguments: { runId },
+    });
+    expect(summary.structuredContent).toMatchObject({
+      snapshot: { run: { id: runId }, counts: { pages: 2 } },
+    });
+    const pages = await client.callTool({
+      name: "crawler_get_snapshot",
+      arguments: { runId, section: "pages", limit: 1 },
+    });
+    expect(pages.structuredContent).toMatchObject({
+      runId,
+      section: "pages",
+      pages: [{}],
+      pageInfo: { limit: 1 },
+    });
+    const missing = await client.callTool({
+      name: "crawler_get_snapshot",
+      arguments: { runId: "33333333-3333-4333-8333-333333333333" },
+    });
+    expect(missing.isError).toBe(true);
+    expect(missing.structuredContent).toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("paginates monitoring snapshots with an opaque cursor", async () => {

@@ -224,6 +224,12 @@ The crawler exposes:
   an explicit `completed` or `partial` status;
 - `crawler_save_snapshot` to dry-run or persist that most recent `runId`
   idempotently (`dryRun=false` also requires `confirm=true`);
+- `crawler_list_snapshots` for compact target/date-filtered history with cursor
+  pagination;
+- `crawler_get_snapshot` for a run summary or an explicitly requested paginated
+  `pages`, `issues` or `links` section;
+- `crawler_compare_snapshots` for a bounded page/issue diff between two saved
+  runs of the same target, with crawl configuration changes reported separately;
 - `crawler_analyze_internal_links` for orphan, deep, weakly linked and broken
   pages;
 - `crawler_reconcile_yandex_index` for Sitemap/crawl/Webmaster comparison and a
@@ -248,6 +254,11 @@ unsupported storage fails closed and is never overwritten automatically. See the
 Persisted issues use a versioned stable fingerprint based on normalized URL,
 category and issue code. Volatile evidence does not change identity; link issues
 also include the related URL so separate broken links are not deduplicated.
+
+Snapshot comparison reports `new`, `resolved`, `worsened`, `improved` and
+`unchanged` lifecycle states. Its summary covers the complete snapshots while
+`exampleLimit` bounds returned page and issue details; page field changes include
+status, indexability, canonical, title, description, headings and outgoing links.
 
 The versioned crawl-history storage model and migration contract are documented
 in [`docs/architecture/crawl-snapshot-storage.md`](docs/architecture/crawl-snapshot-storage.md).
