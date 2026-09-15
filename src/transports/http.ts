@@ -7,6 +7,18 @@ import type { AppConfig } from "../config.js";
 import { createServer, type YandexSeoServer } from "../server.js";
 import { telemetry } from "../shared/telemetry.js";
 
+export function createOAuthProfileConfig(config: AppConfig, accessToken: string): AppConfig {
+  const profileConfig = { ...config };
+  // An agency login belongs to the operator, not to arbitrary OAuth users.
+  delete profileConfig.directClientLogin;
+  return {
+    ...profileConfig,
+    metricaToken: accessToken,
+    webmasterToken: accessToken,
+    directToken: accessToken,
+  };
+}
+
 export async function startHttpTransport(
   yandexServer: YandexSeoServer,
   config: AppConfig,
@@ -101,11 +113,7 @@ export async function startHttpTransport(
           let session = profileSessions.get(sessionKey);
           if (!session) {
             const profileServer = createServer({
-              config: {
-                ...config,
-                metricaToken: profile.accessToken,
-                webmasterToken: profile.accessToken,
-              },
+              config: createOAuthProfileConfig(config, profile.accessToken),
             });
             const profileTransport = new StreamableHTTPServerTransport({});
             await profileServer.server.connect(

@@ -1,6 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { ActionStore } from "./actions/store.js";
+import { registerActionTools } from "./actions/tools.js";
 import type { AppConfig } from "./config.js";
+import { DirectClient } from "./direct/client.js";
+import { registerDirectTools } from "./direct/tools.js";
 import { SeoCrawler } from "./crawler/crawler.js";
 import { CrawlSnapshotStore } from "./crawler/snapshot-store.js";
 import { registerCrawlerTools } from "./crawler/tools.js";
@@ -29,17 +33,19 @@ export interface YandexSeoServer {
   server: McpServer;
   metrica: MetricaClient;
   webmaster: WebmasterClient;
+  direct: DirectClient;
   monitoring: MonitoringStore;
   crawler: SeoCrawler;
   crawlSnapshots: CrawlSnapshotStore;
   seoChanges: SeoChangeStore;
+  actions: ActionStore;
 }
 
 export function createServer(dependencies: ServerDependencies): YandexSeoServer {
   const { config } = dependencies;
   const server = new McpServer({
     name: "yandex-seo-mcp",
-    version: "0.1.0",
+    version: "1.3.0",
   });
   const clientOptions = {
     timeoutMs: config.httpTimeoutMs,
@@ -62,6 +68,13 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
     maxRows: config.maxResultRows,
     maxBytes: config.maxResultBytes,
   };
+  const direct = new DirectClient({
+    ...clientOptions,
+    maxConcurrency: Math.min(config.httpMaxConcurrency ?? 2, 2),
+    ...(config.directToken ? { token: config.directToken } : {}),
+    ...(config.directClientLogin ? { clientLogin: config.directClientLogin } : {}),
+    sandbox: config.directSandbox ?? false,
+  });
   const monitoring = new MonitoringStore(
     config.monitorStoragePath ?? ".yandex-seo-monitor.json",
     config.monitorRetentionDays ?? 90,
@@ -82,6 +95,7 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
     config.monitorStoragePath ?? ".yandex-seo-monitor.json",
     config.crawlerSnapshotQueryDenylist,
   );
+  const actions = new ActionStore(config.monitorStoragePath ?? ".yandex-seo-monitor.json");
 
   server.registerTool(
     "yandex_capabilities",
@@ -97,6 +111,11 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
           services: {
             metrica: { configured: Boolean(config.metricaToken) },
             webmaster: { configured: Boolean(config.webmasterToken) },
+            direct: {
+              configured: Boolean(config.directToken),
+              sandbox: config.directSandbox ?? false,
+              writeRequiresConfirmation: true,
+            },
           },
           limits: {
             maxRows: config.maxResultRows,
@@ -139,7 +158,7 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
     "yandex_connection_check",
     {
       title: "Check Yandex API connections",
-      description: "Perform minimal authenticated calls to Metrica and Webmaster.",
+      description: "Perform minimal authenticated calls to Metrica, Webmaster and Direct.",
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
@@ -157,21 +176,30 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
             return { configured: true, ok: false, error: safeError(error) };
           }
         };
-        const [metricaResult, webmasterResult] = await Promise.all([
+        const [metricaResult, webmasterResult, directResult] = await Promise.all([
           check(Boolean(config.metricaToken), () =>
             metrica.listCounters({ offset: 1, per_page: 1 }),
           ),
           check(Boolean(config.webmasterToken), () => webmaster.getUser()),
+          check(Boolean(config.directToken), () =>
+            direct.rpc("campaigns", "get", {
+              SelectionCriteria: {},
+              FieldNames: ["Id"],
+              Page: { Limit: 1 },
+            }),
+          ),
         ]);
         return {
           metrica: metricaResult,
           webmaster: webmasterResult,
-          ok: metricaResult.ok === true || webmasterResult.ok === true,
+          direct: directResult,
+          ok: metricaResult.ok === true || webmasterResult.ok === true || directResult.ok === true,
         };
       }, limits),
   );
 
   registerMetricaTools(server, metrica, config);
+  registerDirectTools(server, direct, config);
   registerWebmasterTools(server, webmaster, config);
   registerSeoTools(server, metrica, webmaster, config);
   registerMonitoringTools(server, monitoring, metrica, webmaster, config);
@@ -179,6 +207,17 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
   registerCrawlerTools(server, crawler, crawlSnapshots, webmaster, config);
   registerSeoImpactTools(server, seoChanges, crawlSnapshots, metrica, webmaster, config);
   registerQueryIntelligenceTools(server, webmaster, crawler, config);
+  registerActionTools(server, actions, config);
 
-  return { server, metrica, webmaster, monitoring, crawler, crawlSnapshots, seoChanges };
+  return {
+    server,
+    metrica,
+    webmaster,
+    direct,
+    monitoring,
+    crawler,
+    crawlSnapshots,
+    seoChanges,
+    actions,
+  };
 }

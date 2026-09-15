@@ -7,6 +7,8 @@ describe("loadConfig", () => {
 
     expect(config.metricaToken).toBe("common-token");
     expect(config.webmasterToken).toBe("common-token");
+    expect(config.directToken).toBe("common-token");
+    expect(config.directSandbox).toBe(false);
     expect(config.httpTimeoutMs).toBe(30_000);
     expect(config.transport).toBe("stdio");
     expect(config.httpMaxConcurrency).toBe(8);
@@ -36,6 +38,20 @@ describe("loadConfig", () => {
         urlPrefixes: ["https://example.com/private/"],
       },
     ]);
+  });
+
+  it("configures Direct independently and validates agency headers", () => {
+    expect(
+      loadConfig({
+        YANDEX_OAUTH_TOKEN: "common",
+        YANDEX_DIRECT_TOKEN: "direct",
+        YANDEX_DIRECT_CLIENT_LOGIN: "customer",
+        YANDEX_DIRECT_SANDBOX: "true",
+      }),
+    ).toMatchObject({ directToken: "direct", directClientLogin: "customer", directSandbox: true });
+    expect(() =>
+      loadConfig({ YANDEX_DIRECT_CLIENT_LOGIN: "customer\r\nAuthorization: bad" }),
+    ).toThrow();
   });
 
   it("enables destructive crawl history write tools explicitly", () => {

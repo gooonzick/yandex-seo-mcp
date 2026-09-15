@@ -2,7 +2,7 @@ import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import type { AppConfig } from "../src/config.js";
 import { createServer } from "../src/server.js";
-import { startHttpTransport } from "../src/transports/http.js";
+import { createOAuthProfileConfig, startHttpTransport } from "../src/transports/http.js";
 
 const baseConfig: AppConfig = {
   httpTimeoutMs: 1000,
@@ -16,6 +16,18 @@ const baseConfig: AppConfig = {
 
 describe("HTTP transport", () => {
   const cleanups: Array<() => Promise<void>> = [];
+
+  it("isolates Direct credentials and agency login in OAuth profiles", () => {
+    const operator = {
+      ...baseConfig,
+      directToken: "operator-token",
+      directClientLogin: "operator-client",
+    };
+    const profile = createOAuthProfileConfig(operator, "profile-token");
+    expect(profile.directToken).toBe("profile-token");
+    expect(profile.directClientLogin).toBeUndefined();
+    expect(operator.directClientLogin).toBe("operator-client");
+  });
 
   afterEach(async () => {
     await Promise.allSettled(cleanups.splice(0).map((cleanup) => cleanup()));

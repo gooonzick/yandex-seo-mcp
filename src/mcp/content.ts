@@ -38,6 +38,7 @@ export function registerMcpContent(
         services: {
           metrica: Boolean(config.metricaToken),
           webmaster: Boolean(config.webmasterToken),
+          direct: Boolean(config.directToken),
         },
         monitoring: {
           retentionDays: config.monitorRetentionDays ?? 90,

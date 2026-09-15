@@ -10,6 +10,15 @@ const environmentSchema = z.object({
   YANDEX_OAUTH_TOKEN: z.string().min(1).optional(),
   YANDEX_METRICA_TOKEN: z.string().min(1).optional(),
   YANDEX_WEBMASTER_TOKEN: z.string().min(1).optional(),
+  YANDEX_DIRECT_TOKEN: z.string().min(1).optional(),
+  YANDEX_DIRECT_CLIENT_LOGIN: z
+    .string()
+    .regex(/^[a-zA-Z0-9_.@-]+$/)
+    .optional(),
+  YANDEX_DIRECT_SANDBOX: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
   YANDEX_HTTP_TIMEOUT_MS: positiveInteger(30_000),
   YANDEX_HTTP_MAX_RETRIES: z.coerce.number().int().min(0).max(8).default(3),
   YANDEX_HTTP_MAX_CONCURRENCY: positiveInteger(8),
@@ -56,6 +65,9 @@ const environmentSchema = z.object({
 export interface AppConfig {
   metricaToken?: string;
   webmasterToken?: string;
+  directToken?: string;
+  directClientLogin?: string;
+  directSandbox?: boolean;
   httpTimeoutMs: number;
   httpMaxRetries: number;
   httpMaxConcurrency?: number;
@@ -126,6 +138,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     .parse(JSON.parse(parsed.CRAWLER_REGRESSION_EXCLUSIONS_JSON) as unknown);
 
   const config: AppConfig = {
+    directSandbox: parsed.YANDEX_DIRECT_SANDBOX,
     httpTimeoutMs: parsed.YANDEX_HTTP_TIMEOUT_MS,
     httpMaxRetries: parsed.YANDEX_HTTP_MAX_RETRIES,
     httpMaxConcurrency: parsed.YANDEX_HTTP_MAX_CONCURRENCY,
@@ -162,6 +175,10 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
   const webmasterToken = parsed.YANDEX_WEBMASTER_TOKEN ?? commonToken;
   if (metricaToken) config.metricaToken = metricaToken;
   if (webmasterToken) config.webmasterToken = webmasterToken;
+  const directToken = parsed.YANDEX_DIRECT_TOKEN ?? commonToken;
+  if (directToken) config.directToken = directToken;
+  if (parsed.YANDEX_DIRECT_CLIENT_LOGIN)
+    config.directClientLogin = parsed.YANDEX_DIRECT_CLIENT_LOGIN;
   if (parsed.MCP_HTTP_BEARER_TOKEN) config.mcpBearerToken = parsed.MCP_HTTP_BEARER_TOKEN;
   if (parsed.YANDEX_OAUTH_CLIENT_ID) config.oauthClientId = parsed.YANDEX_OAUTH_CLIENT_ID;
   if (parsed.YANDEX_OAUTH_CLIENT_SECRET)

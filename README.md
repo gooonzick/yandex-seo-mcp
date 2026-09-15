@@ -1,11 +1,17 @@
 # Yandex SEO MCP
 
-An MCP server for Yandex Metrica and Yandex Webmaster. It gives AI clients
+An MCP server for Yandex Metrica, Yandex Webmaster and Yandex Direct. It gives AI clients
 typed tools for analytics reports, indexing data, search queries, sitemaps,
 recrawling, and the Metrica Logs API.
 
+Yandex Direct tools cover campaign management (including unified campaigns),
+ads, keywords, bids, creatives and advertising reports. See [Direct setup and tools](docs/yandex-direct.md).
+
 ## Features
 
+- Yandex Direct campaigns, ad groups, ads, keywords/autotargeting, bids,
+  negative keywords, targeting, extensions, feeds and performance/search-query reports.
+- Direct changes default to a dry-run payload; execution requires explicit confirmation.
 - Yandex Metrica counters, goal details, access grants, custom reports, trends,
   organic landing-page and search-phrase presets.
 - Metrica Logs API evaluation, creation, request listing, status checks, cancellation,
@@ -87,6 +93,7 @@ You can also use separate applications or tokens when the permissions differ:
 ```text
 YANDEX_METRICA_TOKEN=metrica-token
 YANDEX_WEBMASTER_TOKEN=webmaster-token
+YANDEX_DIRECT_TOKEN=direct-token
 ```
 
 Service-specific tokens take precedence over `YANDEX_OAUTH_TOKEN`. If a token is
@@ -345,6 +352,14 @@ plus a signal code, observation timestamp and bounded summary. Arbitrary payload
 are rejected. Identity is the deterministic `act:v1:<sha256>` of source,
 category, scope and primary signal. See the
 [action model contract](docs/architecture/action-item-model.md).
+
+`seo_ingest_action_signals` normalizes bounded results from crawl regressions,
+Webmaster diagnostics, content decay, cannibalization, content gaps and monitoring
+alerts. Ingest is atomic and idempotent by action fingerprint. Missing signals
+remain open unless the caller marks the producer batch `sourceComplete: true`;
+only then are absent items from the same target and source resolved. Reappearing
+signals reopen resolved items, and secret query parameters are removed before
+persistence.
 
 The shared cursor contract is documented in
 [`docs/architecture/cursor-pagination.md`](docs/architecture/cursor-pagination.md).

@@ -245,6 +245,7 @@ describe("Yandex SEO MCP server", () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     await Promise.allSettled([client.close(), server.close()]);
   });
 
@@ -296,6 +297,7 @@ describe("Yandex SEO MCP server", () => {
     expect(names).toContain("query_intelligence_map_pages");
     expect(names).toContain("query_intelligence_find_content_gaps");
     expect(names).toContain("query_intelligence_generate_content_brief");
+    expect(names).toContain("seo_ingest_action_signals");
     expect(names).toContain("metrica_logs_clean");
     expect(names).toContain("metrica_logs_cancel");
     expect(names).toContain("metrica_create_counter");
@@ -327,6 +329,43 @@ describe("Yandex SEO MCP server", () => {
       "crawler_cleanup_history",
     );
     await Promise.all([disabledClient.close(), disabled.server.close()]);
+  });
+
+  it("ingests action signals idempotently through MCP", async () => {
+    const arguments_ = {
+      producer: "content_decay",
+      target: "https://example.com/",
+      resultId: "decay:2026-08-08",
+      observedAt: "2026-08-08T10:00:00.000Z",
+      sourceComplete: true,
+      signals: [
+        {
+          kind: "content_decay",
+          url: "https://example.com/declining",
+          severity: "HIGH",
+          previousVisits: 100,
+          currentVisits: 50,
+          dropPercent: 50,
+        },
+      ],
+    };
+    const created = await client.callTool({
+      name: "seo_ingest_action_signals",
+      arguments: arguments_,
+    });
+    const repeated = await client.callTool({
+      name: "seo_ingest_action_signals",
+      arguments: arguments_,
+    });
+
+    expect(created.isError).not.toBe(true);
+    expect(created.structuredContent).toMatchObject({
+      summary: { created: 1, updated: 0, resolved: 0 },
+      actions: [{ status: "open" }],
+    });
+    expect(repeated.structuredContent).toMatchObject({
+      summary: { created: 0, unchanged: 1 },
+    });
   });
 
   it("saves the latest crawl through the MCP tool idempotently", async () => {
@@ -485,6 +524,9 @@ describe("Yandex SEO MCP server", () => {
   });
 
   it("records and lists SEO changes idempotently", async () => {
+    // Keep the fixture's post-change window incomplete regardless of the real date.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-03T12:00:00Z"));
     const arguments_ = {
       target: "https://example.com/",
       timestamp: "2026-08-03T10:00:00.000Z",

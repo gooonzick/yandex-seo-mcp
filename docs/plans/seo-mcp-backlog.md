@@ -287,12 +287,23 @@ signal и проверяется схемой при чтении.
 
 ### ACT-002 — Нормализовать сигналы существующих подсистем
 
+- Статус: `completed` (2026-08-08)
 - Размер: `L`
 - Зависимости: ACT-001, CRWL-006
 - Критерии приемки:
   - ingest из crawler, Webmaster diagnostics, content decay, cannibalization, content gaps и monitoring alerts;
   - повторный запуск не создает дубликаты;
   - исчезнувшие сигналы переводятся в resolved только после подтверждения.
+
+Реализация: `seo_ingest_action_signals` принимает strict bounded batch одного из
+шести источников: crawl regressions, Webmaster diagnostics, content decay,
+cannibalization, content gaps или monitoring alerts. Source-specific adapters
+нормализуют scope, category, severity, impact, confidence, effort и traceable
+evidence; denylist query-параметры удаляются до записи. Atomic ingest обновляет
+существующий `act:v1` fingerprint без дубликатов, хранит до 100 уникальных
+evidence-наблюдений и переоткрывает повторно появившийся resolved item.
+Исчезнувшие сигналы разрешаются только для того же target/source tool и только
+при явном `sourceComplete=true`; неполные и top-N batch не меняют их lifecycle.
 
 ### ACT-003 — Реализовать scoring
 

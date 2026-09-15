@@ -1,6 +1,7 @@
 # Unified action item model
 
-Status: implemented by `ACT-001` on 2026-08-03.
+Status: model implemented by `ACT-001` on 2026-08-03; source ingestion implemented
+by `ACT-002` on 2026-08-08.
 
 ## Storage contract
 
@@ -49,3 +50,25 @@ primary evidence signal. Volatile severity, scores, lifecycle and summaries are
 excluded, allowing later ingest to update an existing action instead of creating
 duplicates. The storage schema recomputes and validates the fingerprint on every
 read.
+
+## Signal ingestion
+
+`seo_ingest_action_signals` accepts one strict batch from crawler regressions,
+Webmaster diagnostics, content decay, cannibalization, content gaps or monitoring
+alerts. Each producer has a discriminated signal schema; a batch contains at
+most 500 signals, URL/query scopes contain at most 500 members, and the normalizer
+never stores an arbitrary upstream payload. Secret query parameters are removed
+before target and affected URLs are fingerprinted or persisted.
+
+The adapter deterministically maps every signal to source, category, severity,
+impact, confidence and effort. Evidence keeps the exact producer tool, typed
+result ID, stable signal code and observation time. Repeating the same result is
+idempotent; a new observation with the same fingerprint updates bounded evidence
+instead of creating another item. A resolved item is reopened when its signal is
+observed again, while ignored items remain ignored.
+
+Absence is not evidence by default. Only a batch with `sourceComplete=true` may
+resolve actions absent from that batch, and only for the same canonical target
+and producer tool. Callers must keep it false for truncated, sampled or top-N
+source results. Status changes made by this synchronization rule are distinct
+from the user-driven lifecycle and audit log planned in `ACT-005`.

@@ -55,6 +55,10 @@
 - Strict unified action-item model with canonical affected scope, five-state
   lifecycle, separate severity/impact/confidence/effort, traceable bounded source
   evidence and deterministic `act:v1` fingerprints.
+- Atomic Action Center ingestion via `seo_ingest_action_signals` for crawler,
+  Webmaster, content decay, cannibalization, content-gap and monitoring signals;
+  deterministic normalization, fingerprint idempotency, bounded evidence,
+  confirmed-absence resolution and resolved-item reopening.
 - MCP resources и prompts для типовых SEO workflow.
 - GET cache, bounded concurrency, HTTP rate limiting, telemetry и readiness endpoint.
 - Multi-user OAuth Authorization Code + PKCE, encrypted profile storage и изолированные bearer sessions.
