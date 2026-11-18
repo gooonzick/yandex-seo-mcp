@@ -7,6 +7,7 @@ export type QueryValue =
 export interface HttpClientOptions {
   baseUrl: string;
   token?: string;
+  authScheme?: "OAuth" | "Api-Key";
   timeoutMs: number;
   maxRetries: number;
   maxConcurrency?: number;
@@ -69,6 +70,7 @@ function getApiMessage(payload: unknown, status: number): string {
 export class YandexHttpClient {
   private readonly baseUrl: URL;
   private readonly token: string | undefined;
+  private readonly authScheme: string;
   private readonly timeoutMs: number;
   private readonly maxRetries: number;
   private readonly fetchImplementation: typeof globalThis.fetch;
@@ -81,6 +83,7 @@ export class YandexHttpClient {
   public constructor(options: HttpClientOptions) {
     this.baseUrl = new URL(options.baseUrl.endsWith("/") ? options.baseUrl : `${options.baseUrl}/`);
     this.token = options.token;
+    this.authScheme = options.authScheme ?? "OAuth";
     this.timeoutMs = options.timeoutMs;
     this.maxRetries = options.maxRetries;
     this.maxConcurrency = options.maxConcurrency ?? 8;
@@ -123,7 +126,7 @@ export class YandexHttpClient {
           const response = await this.fetchImplementation(url, {
             method,
             headers: {
-              Authorization: `OAuth ${this.token}`,
+              Authorization: `${this.authScheme} ${this.token}`,
               Accept: "application/json",
               ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
               ...options.headers,

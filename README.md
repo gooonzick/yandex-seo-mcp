@@ -1,6 +1,6 @@
 # Yandex SEO MCP
 
-An MCP server for Yandex Metrica, Yandex Webmaster and Yandex Direct. It gives AI clients
+An MCP server for Yandex Metrica, Yandex Webmaster, Yandex Direct and Yandex Wordstat. It gives AI clients
 typed tools for analytics reports, indexing data, search queries, sitemaps,
 recrawling, and the Metrica Logs API.
 
@@ -102,6 +102,15 @@ compromised, revoke it in Yandex ID and issue a new one. See the official
 and
 [Webmaster OAuth guide](https://yandex.ru/dev/webmaster/doc/ru/tasks/how-to-get-oauth)
 for service-specific details.
+
+## Yandex Wordstat
+
+Set `YANDEX_WORDSTAT_FOLDER_ID` and `YANDEX_WORDSTAT_API_KEY` in the MCP server environment. Grant the service account the `search-api.webSearch.user` role on that folder and create a key with the `yc.search-api.execute` scope. Wordstat uses the server operator’s Cloud account. In multi-user mode, individual OAuth profile sessions have no access to that key. Run `yandex_connection_check` to verify access. [Yandex setup guide](https://aistudio.yandex.ru/ru/docs/search-api/operations/wordstat-gettop)
+
+- `wordstat_expand_queries` returns the total search count, matching phrases and related phrases. Example arguments: `{"phrase":"велосипед","regions":["213"],"numPhrases":20}`.
+- `wordstat_get_demand` returns search counts and shares over time. Example arguments: `{"phrase":"велосипед","period":"PERIOD_MONTHLY","fromDate":"2026-01-01","toDate":"2026-09-30"}`. Weekly ranges run Monday through Sunday, and monthly ranges cover whole months.
+
+Both tools support region and device filters. As of November 2026, Yandex reports that Wordstat API statistics are available only through October 7, 2026. [Wordstat data availability](https://aistudio.yandex.ru/ru/docs/search-api/concepts/wordstat)
 
 ## MCP client configuration
 

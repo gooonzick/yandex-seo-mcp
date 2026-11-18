@@ -10,6 +10,8 @@ const environmentSchema = z.object({
   YANDEX_OAUTH_TOKEN: z.string().min(1).optional(),
   YANDEX_METRICA_TOKEN: z.string().min(1).optional(),
   YANDEX_WEBMASTER_TOKEN: z.string().min(1).optional(),
+  YANDEX_WORDSTAT_API_KEY: z.string().trim().optional(),
+  YANDEX_WORDSTAT_FOLDER_ID: z.string().trim().max(50).optional(),
   YANDEX_DIRECT_TOKEN: z.string().min(1).optional(),
   YANDEX_DIRECT_CLIENT_LOGIN: z
     .string()
@@ -65,6 +67,7 @@ const environmentSchema = z.object({
 export interface AppConfig {
   metricaToken?: string;
   webmasterToken?: string;
+  wordstat?: { apiKey: string; folderId: string };
   directToken?: string;
   directClientLogin?: string;
   directSandbox?: boolean;
@@ -175,6 +178,12 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
   const webmasterToken = parsed.YANDEX_WEBMASTER_TOKEN ?? commonToken;
   if (metricaToken) config.metricaToken = metricaToken;
   if (webmasterToken) config.webmasterToken = webmasterToken;
+  if (parsed.YANDEX_WORDSTAT_API_KEY && parsed.YANDEX_WORDSTAT_FOLDER_ID) {
+    config.wordstat = {
+      apiKey: parsed.YANDEX_WORDSTAT_API_KEY,
+      folderId: parsed.YANDEX_WORDSTAT_FOLDER_ID,
+    };
+  }
   const directToken = parsed.YANDEX_DIRECT_TOKEN ?? commonToken;
   if (directToken) config.directToken = directToken;
   if (parsed.YANDEX_DIRECT_CLIENT_LOGIN)

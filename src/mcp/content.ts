@@ -38,6 +38,7 @@ export function registerMcpContent(
         services: {
           metrica: Boolean(config.metricaToken),
           webmaster: Boolean(config.webmasterToken),
+          wordstat: Boolean(config.wordstat),
           direct: Boolean(config.directToken),
         },
         monitoring: {

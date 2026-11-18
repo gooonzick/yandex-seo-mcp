@@ -1,0 +1,10 @@
+{
+  "dynamics": {
+    "results": [{ "date": "2026-09-01T00:00:00Z", "count": "1200", "share": 0.001 }]
+  },
+  "topRequests": {
+    "totalCount": "9007199254740993",
+    "results": [{ "phrase": "купить велосипед", "count": "1200" }],
+    "associations": [{ "phrase": "магазин велосипедов", "count": "310" }]
+  }
+}

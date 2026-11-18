@@ -11,6 +11,7 @@ export function createOAuthProfileConfig(config: AppConfig, accessToken: string)
   const profileConfig = { ...config };
   // An agency login belongs to the operator, not to arbitrary OAuth users.
   delete profileConfig.directClientLogin;
+  delete profileConfig.wordstat;
   return {
     ...profileConfig,
     metricaToken: accessToken,
@@ -152,10 +153,13 @@ export async function startHttpTransport(
   app.get("/ready", (context) =>
     context.json({
       status:
-        config.metricaToken || config.webmasterToken || oauthConfigured ? "ready" : "degraded",
+        config.metricaToken || config.webmasterToken || config.wordstat || oauthConfigured
+          ? "ready"
+          : "degraded",
       services: {
         metrica: Boolean(config.metricaToken),
         webmaster: Boolean(config.webmasterToken),
+        wordstat: Boolean(config.wordstat),
         multiUserOAuth: oauthConfigured,
       },
     }),

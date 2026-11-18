@@ -22,6 +22,8 @@ import { safeError } from "./shared/errors.js";
 import { handleTool } from "./shared/result.js";
 import { WebmasterClient } from "./webmaster/client.js";
 import { registerWebmasterTools } from "./webmaster/tools.js";
+import { WordstatClient } from "./wordstat/client.js";
+import { registerWordstatTools } from "./wordstat/tools.js";
 
 export interface ServerDependencies {
   config: AppConfig;
@@ -75,6 +77,7 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
     ...(config.directClientLogin ? { clientLogin: config.directClientLogin } : {}),
     sandbox: config.directSandbox ?? false,
   });
+  const wordstat = new WordstatClient(clientOptions, config.wordstat);
   const monitoring = new MonitoringStore(
     config.monitorStoragePath ?? ".yandex-seo-monitor.json",
     config.monitorRetentionDays ?? 90,
@@ -111,6 +114,7 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
           services: {
             metrica: { configured: Boolean(config.metricaToken) },
             webmaster: { configured: Boolean(config.webmasterToken) },
+            wordstat: { configured: Boolean(config.wordstat) },
             direct: {
               configured: Boolean(config.directToken),
               sandbox: config.directSandbox ?? false,
@@ -158,7 +162,7 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
     "yandex_connection_check",
     {
       title: "Check Yandex API connections",
-      description: "Perform minimal authenticated calls to Metrica, Webmaster and Direct.",
+      description: "Perform minimal authenticated calls to configured Yandex services.",
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
@@ -176,7 +180,7 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
             return { configured: true, ok: false, error: safeError(error) };
           }
         };
-        const [metricaResult, webmasterResult, directResult] = await Promise.all([
+        const [metricaResult, webmasterResult, directResult, wordstatResult] = await Promise.all([
           check(Boolean(config.metricaToken), () =>
             metrica.listCounters({ offset: 1, per_page: 1 }),
           ),
@@ -188,17 +192,22 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
               Page: { Limit: 1 },
             }),
           ),
+          check(Boolean(config.wordstat), () => wordstat.request("getRegionsTree", {})),
         ]);
         return {
           metrica: metricaResult,
           webmaster: webmasterResult,
           direct: directResult,
-          ok: metricaResult.ok === true || webmasterResult.ok === true || directResult.ok === true,
+          wordstat: wordstatResult,
+          ok: [metricaResult, webmasterResult, directResult, wordstatResult].some(
+            (result) => result.ok === true,
+          ),
         };
       }, limits),
   );
 
   registerMetricaTools(server, metrica, config);
+  registerWordstatTools(server, wordstat, limits);
   registerDirectTools(server, direct, config);
   registerWebmasterTools(server, webmaster, config);
   registerSeoTools(server, metrica, webmaster, config);
