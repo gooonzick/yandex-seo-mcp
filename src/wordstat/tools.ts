@@ -16,7 +16,8 @@ const filters = {
     .max(3)
     .optional(),
 };
-const availability = "Yandex currently reports statistics only through 2026-10-07.";
+const availability =
+  "Statistics lag behind the calendar: check the last date in the response instead of assuming data up to today.";
 const annotations = { readOnlyHint: true, openWorldHint: true };
 
 export function registerWordstatTools(

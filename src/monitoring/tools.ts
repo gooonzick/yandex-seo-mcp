@@ -105,7 +105,8 @@ export async function captureSnapshot(
       device_type_indicator: "ALL",
       search_location: "WEB_LOCATION",
       text_indicator: "QUERY",
-      sort_by_date: { date: today, statistic_field: "IMPRESSIONS", by: "DESC" },
+      // No sort_by_date: Yandex answers HTTP 400 when the sort date is outside
+      // the window it currently serves, and that window can lag behind today.
     }),
     target.counterId
       ? metrica.getReport({

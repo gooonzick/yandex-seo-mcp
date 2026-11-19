@@ -1,6 +1,6 @@
 {
   "name": "@gooonzick/yandex-seo-mcp",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "MCP server for Yandex Metrica, Webmaster, Direct and Wordstat",
   "repository": {
     "type": "git",

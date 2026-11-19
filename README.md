@@ -112,7 +112,7 @@ Set `YANDEX_WORDSTAT_FOLDER_ID` and `YANDEX_WORDSTAT_API_KEY` in the MCP server 
 - `wordstat_expand_queries` returns the total search count, matching phrases and related phrases. Example arguments: `{"phrase":"велосипед","regions":["213"],"numPhrases":20}`.
 - `wordstat_get_demand` returns search counts and shares over time. Example arguments: `{"phrase":"велосипед","period":"PERIOD_MONTHLY","fromDate":"2026-01-01","toDate":"2026-09-30"}`. Weekly ranges run Monday through Sunday, and monthly ranges cover whole months.
 
-Both tools support region and device filters. As of November 2026, Yandex reports that Wordstat API statistics are available only through October 7, 2026. [Wordstat data availability](https://aistudio.yandex.ru/ru/docs/search-api/concepts/wordstat)
+Both tools support region and device filters. Wordstat statistics lag behind the calendar, so check the last date in the response instead of assuming data up to today. Yandex documentation said statistics end on October 7, 2026, but a live daily report on November 19, 2026 returned data through November 11, 2026. [Wordstat data availability](https://aistudio.yandex.ru/ru/docs/search-api/concepts/wordstat)
 
 ## MCP client configuration
 
