@@ -1,7 +1,7 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CrawlSnapshotStore } from "../src/crawler/snapshot-store.js";
 import type { CrawlResult } from "../src/crawler/types.js";
 import { SeoChangeStore } from "../src/impact/change-store.js";
@@ -80,6 +80,15 @@ function result(options: ResultOptions): CrawlResult {
 }
 
 describe("SEO change crawl impact", () => {
+  // Fixtures are dated 2026-08-03; pin the clock so retention keeps them.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-04T00:00:00Z"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("uses the nearest crawl pair and filters by URL scope and change type", async () => {
     const directory = await mkdtemp(join(tmpdir(), "yandex-seo-change-impact-"));
     const filePath = join(directory, "snapshots.json");
