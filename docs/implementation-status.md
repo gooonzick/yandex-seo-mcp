@@ -59,6 +59,11 @@
   Webmaster, content decay, cannibalization, content-gap and monitoring signals;
   deterministic normalization, fingerprint idempotency, bounded evidence,
   confirmed-absence resolution and resolved-item reopening.
+- Read-only инструменты Wordstat через Yandex Cloud Search API v2:
+  `wordstat_expand_queries` (совпадающие и похожие фразы за 30 дней) и
+  `wordstat_get_demand` (динамика по дням, неделям и месяцам) с фильтрами по
+  регионам и устройствам; авторизация `Api-Key` оператора сервера, изоляция от
+  multi-user OAuth-профилей и проверка доступа в `yandex_connection_check`.
 - MCP resources и prompts для типовых SEO workflow.
 - GET cache, bounded concurrency, HTTP rate limiting, telemetry и readiness endpoint.
 - Multi-user OAuth Authorization Code + PKCE, encrypted profile storage и изолированные bearer sessions.
@@ -78,6 +83,8 @@
 
 - Live smoke tests нельзя выполнить без пользовательских OAuth-токенов и доступных тестовых счетчика/сайта.
 - Регистрация OAuth-приложения выполняется владельцем проекта в аккаунте Яндекса.
+- Wordstat требует сервисного аккаунта Yandex Cloud с ролью `search-api.webSearch.user`
+  и API-ключа; live-вызовы Wordstat не выполнялись, тесты используют fixture-ответы.
 
 ## Отложено осознанно
 

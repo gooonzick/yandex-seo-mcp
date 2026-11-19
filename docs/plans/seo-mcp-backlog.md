@@ -404,6 +404,7 @@ evidence-наблюдений и переоткрывает повторно п�
 
 ### DEM-002 — Получать спрос и сезонность
 
+- Статус: `completed` (2026-11-18)
 - Размер: `L`
 - Зависимости: DEM-001
 - Tools: `wordstat_get_demand`, `wordstat_expand_queries` либо provider-neutral названия.

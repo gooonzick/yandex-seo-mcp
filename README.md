@@ -19,6 +19,8 @@ ads, keywords, bids, creatives and advertising reports. See [Direct setup and to
 - Yandex Webmaster sites, ownership verification, summaries, indexing status,
   indexed pages, search queries, query/URL analytics, diagnostics, user-added
   Sitemaps, URL recrawl requests, and priority Sitemap recrawl status/actions.
+- Yandex Wordstat search demand over time and query expansion with matching and
+  related phrases, filtered by region and device.
 - Cross-service page analysis, growth forecasting, cannibalization detection,
   content decay, period comparisons, and a compact site audit.
 - Safe Metrica segment and attribution presets for devices, regions, visitor
@@ -399,6 +401,8 @@ reproducible and lexical; editorial and live SERP validation are still required.
 | `YANDEX_OAUTH_TOKEN`                  | —                          | Shared fallback token                       |
 | `YANDEX_METRICA_TOKEN`                | —                          | Yandex Metrica token                        |
 | `YANDEX_WEBMASTER_TOKEN`              | —                          | Yandex Webmaster token                      |
+| `YANDEX_WORDSTAT_API_KEY`             | —                          | Yandex Cloud API key for Wordstat           |
+| `YANDEX_WORDSTAT_FOLDER_ID`           | —                          | Yandex Cloud folder ID for Wordstat         |
 | `YANDEX_HTTP_TIMEOUT_MS`              | `30000`                    | Upstream request timeout                    |
 | `YANDEX_HTTP_MAX_RETRIES`             | `3`                        | Transient-error retry count                 |
 | `YANDEX_HTTP_MAX_CONCURRENCY`         | `8`                        | Maximum parallel upstream requests          |

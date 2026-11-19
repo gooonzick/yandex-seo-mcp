@@ -47,7 +47,7 @@ export function createServer(dependencies: ServerDependencies): YandexSeoServer 
   const { config } = dependencies;
   const server = new McpServer({
     name: "yandex-seo-mcp",
-    version: "1.3.0",
+    version: "1.4.0",
   });
   const clientOptions = {
     timeoutMs: config.httpTimeoutMs,
